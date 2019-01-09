@@ -1,4 +1,4 @@
-# <img src="https://cloud.githubusercontent.com/assets/873584/26024695/4defcb5e-3809-11e7-9755-fa4d22c45718.png"> [Solo](https://github.com/b3log/solo) [![Build Status](https://img.shields.io/travis/b3log/solo.svg?style=flat)](https://travis-ci.org/b3log/solo) [![Coverage Status](https://img.shields.io/coveralls/b3log/solo.svg?style=flat)](https://coveralls.io/github/b3log/solo?branch=master)  [![AGPLv3](http://img.shields.io/badge/license-AGPLv3-orange.svg?style=flat)](https://www.gnu.org/licenses/agpl-3.0.txt) [![Download](http://img.shields.io/badge/download-14K+-blue.svg?style=flat)](https://pan.baidu.com/s/1dzk7SU) 
+# <img src="https://cloud.githubusercontent.com/assets/873584/26024695/4defcb5e-3809-11e7-9755-fa4d22c45718.png"> [Solo](https://github.com/b3log/solo) [![Build Status](https://img.shields.io/travis/b3log/solo.svg?style=flat)](https://travis-ci.org/b3log/solo) [![Coverage Status](https://img.shields.io/coveralls/b3log/solo.svg?style=flat)](https://coveralls.io/github/b3log/solo?branch=master)  [![AGPLv3](http://img.shields.io/badge/license-AGPLv3-orange.svg?style=flat)](https://www.gnu.org/licenses/agpl-3.0.txt)
 
 ## 简介
 
@@ -16,7 +16,9 @@
 * [1992 社区](https://1992.cool)
 * [何遇](http://littleq.cn)
 * [Relyn](http://relyn.cn)
-* [幸运草](https://www.vseu.com)
+* [Neverland](https://muz1.xyz)
+* [思干豆](http://sigandou.com)
+* [DevHyxo](https://blog.devhyxo.top)
 
 ## 功能 
 
@@ -33,7 +35,7 @@
 * 代码高亮 / 数学公式 / 流程图
 * [多皮肤，多端适配](https://github.com/b3log/solo-skins/tree/master/skin-preview) / [社区皮肤](https://github.com/b3log/solo-third-skins/tree/master/skin-preview)
 * 多语言 / 国际化
-* 上传本地 / 七牛云
+* 上传本地 / 七牛云 / 阿里云 OSS
 * 友情链接管理
 * 多用户写作，团队博客
 * [Hexo/Jekyll 导入](https://hacpai.com/article/1498490209748)
@@ -61,7 +63,7 @@
 
 ## 安装
 
-[下载](https://pan.baidu.com/s/1dzk7SU)最新的 Solo 包解压，进入解压目录执行：
+[下载](https://github.com/b3log/solo/releases)最新的 Solo 包解压，进入解压目录执行：
 
 * Windows: `java -cp "WEB-INF/lib/*;WEB-INF/classes" org.b3log.solo.Starter`
 * Unix-like: `java -cp "WEB-INF/lib/*:WEB-INF/classes" org.b3log.solo.Starter`
@@ -95,6 +97,7 @@ Solo 使用 [GNU Affero General Public License, Version 3](https://www.gnu.org/l
 * [jQuery](https://github.com/jquery/jquery)：前端 JavaScript 工具库
 * [CodeMirror](https://github.com/codemirror/CodeMirror)：前端 Markdown 编辑器内核
 * [Highlight.js](https://github.com/isagalaev/highlight.js)：前端代码高亮库
+* [pjax](https://github.com/defunkt/jquery-pjax)：pushState + ajax = pjax
 * [jsoup](https://github.com/jhy/jsoup)：Java HTML 解析器
 * [flexmark](https://github.com/vsch/flexmark-java)：Java Markdown 处理库
 * [Apache Commons](http://commons.apache.org)：Java 工具库集

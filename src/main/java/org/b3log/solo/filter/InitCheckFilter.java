@@ -1,6 +1,6 @@
 /*
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -20,15 +20,9 @@ package org.b3log.solo.filter;
 import org.apache.commons.lang.StringUtils;
 import org.b3log.latke.Keys;
 import org.b3log.latke.Latkes;
-import org.b3log.latke.ioc.LatkeBeanManager;
-import org.b3log.latke.ioc.Lifecycle;
+import org.b3log.latke.ioc.BeanManager;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
-import org.b3log.latke.servlet.DispatcherServlet;
-import org.b3log.latke.servlet.HTTPRequestContext;
-import org.b3log.latke.servlet.HTTPRequestMethod;
-import org.b3log.latke.servlet.HttpControl;
-import org.b3log.latke.servlet.renderer.HTTP500Renderer;
 import org.b3log.solo.service.InitService;
 
 import javax.servlet.*;
@@ -40,7 +34,8 @@ import java.io.IOException;
  * Checks initialization filter.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.1.1.3, Sep 21, 2018
+ * @author <a href="https://github.com/TsLenMo">TsLenMo</a>
+ * @version 1.1.1.4, Oct 14, 2018
  * @since 0.3.1
  */
 public final class InitCheckFilter implements Filter {
@@ -73,16 +68,18 @@ public final class InitCheckFilter implements Filter {
             throws IOException, ServletException {
         final HttpServletRequest httpServletRequest = (HttpServletRequest) request;
         final String requestURI = httpServletRequest.getRequestURI();
+        final boolean isSpiderBot = (boolean) httpServletRequest.getAttribute(Keys.HttpRequest.IS_SEARCH_ENGINE_BOT);
         LOGGER.log(Level.TRACE, "Request [URI={0}]", requestURI);
 
-        // If requests Latke Remote APIs, skips this filter 
-        if (requestURI.startsWith(Latkes.getContextPath() + "/latke/remote")) {
-            chain.doFilter(request, response);
+        // 禁止直接获取 robots.txt https://github.com/b3log/solo/issues/12543
+        if (requestURI.startsWith("/robots.txt") && !isSpiderBot) {
+            final HttpServletResponse httpServletResponse = (HttpServletResponse) response;
+            httpServletResponse.sendError(HttpServletResponse.SC_FORBIDDEN);
 
             return;
         }
 
-        final LatkeBeanManager beanManager = Lifecycle.getBeanManager();
+        final BeanManager beanManager = BeanManager.getInstance();
         final InitService initService = beanManager.getReference(InitService.class);
         if (initService.isInited()) {
             chain.doFilter(request, response);
@@ -90,7 +87,8 @@ public final class InitCheckFilter implements Filter {
             return;
         }
 
-        if ("POST".equalsIgnoreCase(httpServletRequest.getMethod()) && (Latkes.getContextPath() + "/init").equals(requestURI) ||
+        if ("POST".equalsIgnoreCase(httpServletRequest.getMethod())
+                && (Latkes.getContextPath() + "/init").equals(requestURI) ||
                 StringUtils.startsWith(requestURI, Latkes.getContextPath() + "/oauth/github")) {
             // Do initialization
             chain.doFilter(request, response);
@@ -103,18 +101,8 @@ public final class InitCheckFilter implements Filter {
             initReported = true;
         }
 
-        final HTTPRequestContext context = new HTTPRequestContext();
-        context.setRequest((HttpServletRequest) request);
-        context.setResponse((HttpServletResponse) response);
         request.setAttribute(Keys.HttpRequest.REQUEST_URI, Latkes.getContextPath() + "/init");
-        request.setAttribute(Keys.HttpRequest.REQUEST_METHOD, HTTPRequestMethod.GET.name());
-        final HttpControl httpControl = new HttpControl(DispatcherServlet.SYS_HANDLER.iterator(), context);
-        try {
-            httpControl.nextHandler();
-        } catch (final Exception e) {
-            context.setRenderer(new HTTP500Renderer(e));
-        }
-        DispatcherServlet.result(context);
+        chain.doFilter(request, response);
     }
 
     @Override

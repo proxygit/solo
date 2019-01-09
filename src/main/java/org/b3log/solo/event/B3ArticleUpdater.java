@@ -1,6 +1,6 @@
 /*
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -23,11 +23,8 @@ import org.b3log.latke.Keys;
 import org.b3log.latke.Latkes;
 import org.b3log.latke.event.AbstractEventListener;
 import org.b3log.latke.event.Event;
-import org.b3log.latke.event.EventException;
-import org.b3log.latke.ioc.LatkeBeanManager;
-import org.b3log.latke.ioc.Lifecycle;
-import org.b3log.latke.ioc.inject.Named;
-import org.b3log.latke.ioc.inject.Singleton;
+import org.b3log.latke.ioc.BeanManager;
+import org.b3log.latke.ioc.Singleton;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.model.User;
@@ -51,7 +48,6 @@ import org.json.JSONObject;
  * @version 1.0.1.5, Sep 25, 2018
  * @since 0.6.0
  */
-@Named
 @Singleton
 public class B3ArticleUpdater extends AbstractEventListener<JSONObject> {
 
@@ -68,7 +64,7 @@ public class B3ArticleUpdater extends AbstractEventListener<JSONObject> {
     public void action(final Event<JSONObject> event) {
         final JSONObject data = event.getData();
 
-        LOGGER.log(Level.DEBUG, "Processing an event[type={0}, data={1}] in listener[className={2}]",
+        LOGGER.log(Level.DEBUG, "Processing an event [type={0}, data={1}] in listener [className={2}]",
                 event.getType(), data, B3ArticleUpdater.class.getName());
         try {
             final JSONObject originalArticle = data.getJSONObject(Article.ARTICLE);
@@ -78,13 +74,15 @@ public class B3ArticleUpdater extends AbstractEventListener<JSONObject> {
                 return;
             }
 
-            final LatkeBeanManager beanManager = Lifecycle.getBeanManager();
+            final BeanManager beanManager = BeanManager.getInstance();
             final PreferenceQueryService preferenceQueryService = beanManager.getReference(PreferenceQueryService.class);
             final ArticleQueryService articleQueryService = beanManager.getReference(ArticleQueryService.class);
 
             final JSONObject preference = preferenceQueryService.getPreference();
             if (null == preference) {
-                throw new EventException("Not found preference");
+                LOGGER.log(Level.ERROR, "Not found preference");
+
+                return;
             }
 
             if (StringUtils.isNotBlank(originalArticle.optString(Article.ARTICLE_VIEW_PWD))) {
@@ -110,6 +108,7 @@ public class B3ArticleUpdater extends AbstractEventListener<JSONObject> {
             article.put(Article.ARTICLE_T_AUTHOR_EMAIL, authorEmail);
             article.put(Article.ARTICLE_CONTENT, originalArticle.getString(Article.ARTICLE_CONTENT));
             article.put(Article.ARTICLE_T_CREATE_DATE, originalArticle.getLong(Article.ARTICLE_CREATED));
+            article.put(Article.ARTICLE_T_UPDATE_DATE, originalArticle.getLong(Article.ARTICLE_UPDATED));
             article.put(Common.POST_TO_COMMUNITY, originalArticle.getBoolean(Common.POST_TO_COMMUNITY));
 
             // Removes this property avoid to persist

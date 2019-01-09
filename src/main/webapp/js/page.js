@@ -1,6 +1,6 @@
 /*
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -20,7 +20,7 @@
  *
  * @author <a href="http://vanessa.b3log.org">Liyuan Li</a>
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.4.0.0, Nov 10, 2017
+ * @version 1.5.1.0, Jan 4, 2019
  */
 var Page = function (tips) {
   this.currentCommentId = "";
@@ -44,7 +44,7 @@ $.extend(Page.prototype, {
         textValue = $comment[0].value;
       textValue = textValue.substring(0, endPosition) + key + textValue.substring(endPosition, textValue.length);
       $("#comment" + name).val(textValue);
-      if ($.browser.msie) {
+      if (!!window.ActiveXObject || "ActiveXObject" in window) {
         endPosition -= textValue.split('\n').length - 1;
         var oR = $comment[0].createTextRange();
         oR.collapse(true);
@@ -330,8 +330,9 @@ $.extend(Page.prototype, {
    */
   parseLanguage: function (obj) {
     var isPrettify = false,
-      isSH = false;
-    $(".article-body pre, .code-highlight pre").each(function () {
+      isSH = false,
+      isHljs = false;
+    $(".article-body pre, .content-reset pre, .code-highlight pre").each(function () {
       if (this.className.indexOf("brush") > -1) {
         isSH = true;
       }
@@ -339,6 +340,8 @@ $.extend(Page.prototype, {
       if (this.className.indexOf("prettyprint") > -1) {
         isPrettify = true;
       }
+
+      isHljs = true
     });
 
     if (isSH) {
@@ -367,22 +370,26 @@ $.extend(Page.prototype, {
     }
 
 
-    // otherelse use highlight
-    // load css
-    if (document.createStyleSheet) {
-      document.createStyleSheet(latkeConfig.staticServePath + "/js/lib/highlight.js-9.6.0/styles/default.css");
-    } else {
-      $("head").append($("<link rel='stylesheet' href='" + latkeConfig.staticServePath + "/js/lib/highlight.js-9.6.0/styles/github.css'>"));
-    }
-    $.ajax({
-      url: latkeConfig.staticServePath + "/js/lib/highlight.js-9.6.0/highlight.pack.js",
-      dataType: "script",
-      cache: true,
-      success: function () {
-        hljs.initHighlighting.called = false;
-        hljs.initHighlighting();
+    if (isHljs) {
+      // otherelse use highlight
+      // load css
+      if (document.createStyleSheet) {
+        document.createStyleSheet(latkeConfig.staticServePath + "/js/lib/highlight-9.13.1/styles/" + ((obj && obj.theme) || 'github') + ".css");
+      } else {
+        $("head").append($("<link rel='stylesheet' href='" + latkeConfig.staticServePath + "/js/lib/highlight-9.13.1/styles/" + ((obj && obj.theme) || 'github') + ".css'>"));
       }
-    });
+      if (!Label.markedAvailable) {
+        $.ajax({
+          url: latkeConfig.staticServePath + "/js/lib/highlight-9.13.1/highlight.pack.js",
+          dataType: "script",
+          cache: true,
+          success: function () {
+            hljs.initHighlighting.called = false;
+            hljs.initHighlighting();
+          }
+        });
+      }
+    }
   },
   /*
    * @description 文章/自定义页面加载
@@ -409,7 +416,7 @@ $.extend(Page.prototype, {
     });
     // captcha
     $("#captcha").click(function () {
-      $(this).attr("src", latkeConfig.servePath + "/captcha.do?code=" + Math.random());
+      $(this).attr("src", latkeConfig.servePath + "/captcha?code=" + Math.random());
     });
     // cookie
     if (!Util.isLoggedIn()) {
@@ -436,7 +443,7 @@ $.extend(Page.prototype, {
     var randomArticles1Label = this.tips.randomArticles1Label;
     // getRandomArticles
     $.ajax({
-      url: latkeConfig.servePath + "/get-random-articles.do",
+      url: latkeConfig.servePath + "/articles/random",
       type: "POST",
       success: function (result, textStatus) {
         var randomArticles = result.randomArticles;
@@ -583,7 +590,7 @@ $.extend(Page.prototype, {
 
       $.ajax({
         type: "POST",
-        url: latkeConfig.servePath + "/add-" + type + "-comment.do",
+        url: latkeConfig.servePath + "/" + type + "/comments",
         cache: false,
         contentType: "application/json",
         data: JSON.stringify(requestJSONObject),
@@ -594,7 +601,7 @@ $.extend(Page.prototype, {
             $("#commentValidate" + state).val('');
             $("#captcha" + state).click();
             if (!Util.isLoggedIn()) {
-              $("#captcha" + state).attr("src", latkeConfig.servePath + "/captcha.do?code=" + Math.random());
+              $("#captcha" + state).attr("src", latkeConfig.servePath + "/captcha?code=" + Math.random());
             }
 
             return;
@@ -605,7 +612,7 @@ $.extend(Page.prototype, {
 
           result.replyNameHTML = "";
           if (!Util.isLoggedIn()) {
-            $("#captcha" + state).attr("src", latkeConfig.servePath + "/captcha.do?code=" + Math.random());
+            $("#captcha" + state).attr("src", latkeConfig.servePath + "/captcha?code=" + Math.random());
             if ($("#commentURL" + state).val().replace(/\s/g, "") === "") {
               result.replyNameHTML = '<a>' + $("#commentName" + state).val() + '</a>';
             } else {
@@ -676,14 +683,15 @@ $.extend(Page.prototype, {
         event.preventDefault();
       }
     });
-    $("#replyForm #captcha").attr("id", "captchaReply").attr("src", latkeConfig.servePath + "/captcha.do?" + new Date().getTime()).click(function () {
-      $(this).attr("src", latkeConfig.servePath + "/captcha.do?code=" + Math.random());
+    $("#replyForm #captcha").attr("id", "captchaReply").attr("src", latkeConfig.servePath + "/captcha?" + new Date().getTime()).click(function () {
+      $(this).attr("src", latkeConfig.servePath + "/captcha?code=" + Math.random());
     });
     $("#replyForm #commentErrorTip").attr("id", "commentErrorTipReply").html("").hide();
     $("#replyForm #submitCommentButton").attr("id", "submitCommentButtonReply");
     $("#replyForm #submitCommentButtonReply").unbind("click").removeAttr("onclick").click(function () {
       that.submitComment(id, 'Reply');
     });
+    $('#replyForm #cancelCommentButton').show()
     if ($("#commentNameReply").val() === "") {
       $("#commentNameReply").focus();
     } else if ($("#commentEmailReply").val() === "") {
@@ -740,7 +748,7 @@ $.extend(Page.prototype, {
       $("#commentErrorTip").html("").hide();
       $("#comment").val("");
       $("#commentValidate").val("");
-      $("#captcha").attr("src", latkeConfig.servePath + "/captcha.do?code=" + Math.random());
+      $("#captcha").attr("src", latkeConfig.servePath + "/captcha?code=" + Math.random());
     } else {
       $("#replyForm").remove();
     }

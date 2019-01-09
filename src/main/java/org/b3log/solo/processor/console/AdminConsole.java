@@ -1,6 +1,6 @@
 /*
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -25,9 +25,9 @@ import org.apache.commons.lang.time.DateFormatUtils;
 import org.b3log.latke.Keys;
 import org.b3log.latke.Latkes;
 import org.b3log.latke.event.Event;
-import org.b3log.latke.event.EventException;
 import org.b3log.latke.event.EventManager;
-import org.b3log.latke.ioc.inject.Inject;
+import org.b3log.latke.ioc.Inject;
+import org.b3log.latke.ioc.Singleton;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.model.Plugin;
@@ -35,13 +35,9 @@ import org.b3log.latke.model.User;
 import org.b3log.latke.plugin.ViewLoadEventData;
 import org.b3log.latke.repository.jdbc.util.Connections;
 import org.b3log.latke.service.LangPropsService;
-import org.b3log.latke.service.ServiceException;
-import org.b3log.latke.servlet.HTTPRequestContext;
-import org.b3log.latke.servlet.HTTPRequestMethod;
+import org.b3log.latke.servlet.RequestContext;
 import org.b3log.latke.servlet.annotation.Before;
-import org.b3log.latke.servlet.annotation.RequestProcessing;
-import org.b3log.latke.servlet.annotation.RequestProcessor;
-import org.b3log.latke.servlet.renderer.freemarker.AbstractFreeMarkerRenderer;
+import org.b3log.latke.servlet.renderer.AbstractFreeMarkerRenderer;
 import org.b3log.latke.util.Execs;
 import org.b3log.latke.util.Strings;
 import org.b3log.solo.SoloServletListener;
@@ -49,17 +45,12 @@ import org.b3log.solo.model.Common;
 import org.b3log.solo.model.Option;
 import org.b3log.solo.model.Skin;
 import org.b3log.solo.model.UserExt;
-import org.b3log.solo.processor.renderer.ConsoleRenderer;
-import org.b3log.solo.processor.util.Filler;
-import org.b3log.solo.service.ExportService;
-import org.b3log.solo.service.OptionQueryService;
-import org.b3log.solo.service.PreferenceQueryService;
-import org.b3log.solo.service.UserQueryService;
-import org.b3log.solo.util.Thumbnails;
+import org.b3log.solo.service.*;
+import org.b3log.solo.util.Markdowns;
+import org.b3log.solo.util.Solos;
 import org.json.JSONObject;
 
 import javax.servlet.ServletOutputStream;
-import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.io.FileInputStream;
@@ -74,11 +65,11 @@ import java.util.*;
  * Admin console render processing.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.7.0.5, Sep 25, 2018
+ * @version 1.7.0.10, Jan 4, 2019
  * @since 0.4.1
  */
-@RequestProcessor
-@Before(adviceClass = ConsoleAuthAdvice.class)
+@Singleton
+@Before(ConsoleAuthAdvice.class)
 public class AdminConsole {
 
     /**
@@ -117,10 +108,10 @@ public class AdminConsole {
     private ExportService exportService;
 
     /**
-     * Filler.
+     * DataModelService.
      */
     @Inject
-    private Filler filler;
+    private DataModelService dataModelService;
 
     /**
      * Event manager.
@@ -128,20 +119,18 @@ public class AdminConsole {
     @Inject
     private EventManager eventManager;
 
-    private static String sanitizeFilename(String unsanitized) {
-        return unsanitized
-                .replaceAll("[\\?\\\\/:|<>\\*]", " ") // filter out ? \ / : | < > *
-                .replaceAll("\\s+", "_");              // white space as underscores
+    private static String sanitizeFilename(final String unsanitized) {
+        return unsanitized.
+                replaceAll("[\\?\\\\/:|<>\\*]", " "). // filter out ? \ / : | < > *
+                replaceAll("\\s+", "_");              // white space as underscores
     }
 
     /**
      * Shows administrator index with the specified context.
      *
-     * @param request the specified request
      * @param context the specified context
      */
-    @RequestProcessing(value = "/admin-index.do", method = HTTPRequestMethod.GET)
-    public void showAdminIndex(final HttpServletRequest request, final HTTPRequestContext context) {
+    public void showAdminIndex(final RequestContext context) {
         final AbstractFreeMarkerRenderer renderer = new ConsoleRenderer();
         context.setRenderer(renderer);
         final String templateName = "admin-index.ftl";
@@ -149,7 +138,7 @@ public class AdminConsole {
         final Map<String, String> langs = langPropsService.getAll(Latkes.getLocale());
         final Map<String, Object> dataModel = renderer.getDataModel();
         dataModel.putAll(langs);
-        final JSONObject currentUser = userQueryService.getCurrentUser(request);
+        final JSONObject currentUser = Solos.getCurrentUser(context.getRequest(), context.getResponse());
         final String userName = currentUser.optString(User.USER_NAME);
         dataModel.put(User.USER_NAME, userName);
         final String roleName = currentUser.optString(User.USER_ROLE);
@@ -159,7 +148,7 @@ public class AdminConsole {
         if (StringUtils.isNotBlank(userAvatar)) {
             dataModel.put(Common.GRAVATAR, userAvatar);
         } else {
-            final String gravatar = Thumbnails.getGravatarURL(email, "128");
+            final String gravatar = Solos.getGravatarURL(email, "128");
             dataModel.put(Common.GRAVATAR, gravatar);
         }
 
@@ -177,7 +166,9 @@ public class AdminConsole {
             dataModel.put(Option.ID_C_EDITOR_TYPE, preference.getString(Option.ID_C_EDITOR_TYPE));
             dataModel.put(Skin.SKIN_DIR_NAME, preference.getString(Skin.SKIN_DIR_NAME));
             Keys.fillRuntime(dataModel);
-            filler.fillMinified(dataModel);
+            dataModelService.fillMinified(dataModel);
+            // 使用 Marked 时代码高亮问题 https://github.com/b3log/solo/issues/12614
+            dataModel.put(Common.MARKED_AVAILABLE, Markdowns.MARKED_AVAILABLE);
         } catch (final Exception e) {
             LOGGER.log(Level.ERROR, "Admin index render failed", e);
         }
@@ -188,27 +179,12 @@ public class AdminConsole {
     /**
      * Shows administrator functions with the specified context.
      *
-     * @param request the specified request
      * @param context the specified context
      */
-    @RequestProcessing(value = {"/admin-article.do",
-            "/admin-article-list.do",
-            "/admin-comment-list.do",
-            "/admin-link-list.do",
-            "/admin-page-list.do",
-            "/admin-others.do",
-            "/admin-draft-list.do",
-            "/admin-user-list.do",
-            "/admin-category-list.do",
-            "/admin-plugin-list.do",
-            "/admin-main.do",
-            "/admin-about.do"},
-            method = HTTPRequestMethod.GET)
-    public void showAdminFunctions(final HttpServletRequest request, final HTTPRequestContext context) {
+    public void showAdminFunctions(final RequestContext context) {
         final AbstractFreeMarkerRenderer renderer = new ConsoleRenderer();
         context.setRenderer(renderer);
-
-        final String requestURI = request.getRequestURI();
+        final String requestURI = context.requestURI();
         final String templateName = StringUtils.substringBetween(requestURI, Latkes.getContextPath() + '/', ".") + ".ftl";
 
         LOGGER.log(Level.TRACE, "Admin function[templateName={0}]", templateName);
@@ -230,11 +206,9 @@ public class AdminConsole {
     /**
      * Shows administrator preference function with the specified context.
      *
-     * @param request the specified request
      * @param context the specified context
      */
-    @RequestProcessing(value = "/admin-preference.do", method = HTTPRequestMethod.GET)
-    public void showAdminPreferenceFunction(final HttpServletRequest request, final HTTPRequestContext context) {
+    public void showAdminPreferenceFunction(final RequestContext context) {
         final AbstractFreeMarkerRenderer renderer = new ConsoleRenderer();
         context.setRenderer(renderer);
         final String templateName = "admin-preference.ftl";
@@ -246,13 +220,7 @@ public class AdminConsole {
         dataModel.putAll(langs);
         dataModel.put(Option.ID_C_LOCALE_STRING, locale.toString());
 
-        JSONObject preference = null;
-        try {
-            preference = preferenceQueryService.getPreference();
-        } catch (final ServiceException e) {
-            LOGGER.log(Level.ERROR, "Loads preference failed", e);
-        }
-
+        final JSONObject preference = preferenceQueryService.getPreference();
         final StringBuilder timeZoneIdOptions = new StringBuilder();
         final String[] availableIDs = TimeZone.getAvailableIDs();
         for (int i = 0; i < availableIDs.length; i++) {
@@ -275,21 +243,22 @@ public class AdminConsole {
     /**
      * Exports data as SQL zip file.
      *
-     * @param request  the specified HTTP servlet request
-     * @param response the specified HTTP servlet response
-     * @param context  the specified HTTP request context
-     * @throws Exception exception
+     * @param context the specified HTTP request context
      */
-    @RequestProcessing(value = "/console/export/sql", method = HTTPRequestMethod.GET)
-    public void exportSQL(final HttpServletRequest request, final HttpServletResponse response, final HTTPRequestContext context)
-            throws Exception {
-        if (!userQueryService.isAdminLoggedIn(request)) {
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
+    public void exportSQL(final RequestContext context) {
+        final HttpServletResponse response = context.getResponse();
+
+        if (!Solos.isAdminLoggedIn(context)) {
+            context.sendError(HttpServletResponse.SC_UNAUTHORIZED);
 
             return;
         }
 
-        Thread.sleep(550); // 前端会发两次请求，文件名又是按秒生成，所以两次请求需要错开至少 1 秒避免文件名冲突
+        try {
+            Thread.sleep(550); // 前端会发两次请求，文件名又是按秒生成，所以两次请求需要错开至少 1 秒避免文件名冲突
+        } catch (final Exception e) {
+            // ignored
+        }
 
         final Latkes.RuntimeDatabase runtimeDatabase = Latkes.getRuntimeDatabase();
         if (Latkes.RuntimeDatabase.H2 != runtimeDatabase && Latkes.RuntimeDatabase.MYSQL != runtimeDatabase) {
@@ -309,9 +278,9 @@ public class AdminConsole {
 
             try {
                 if (StringUtils.isNotBlank(dbPwd)) {
-                    sql = Execs.exec("mysqldump -u" + dbUser + " -p" + dbPwd + " --databases " + db);
+                    sql = Execs.exec("mysqldump -u" + dbUser + " -p" + dbPwd + " --databases " + db, 60 * 1000 * 5);
                 } else {
-                    sql = Execs.exec("mysqldump -u" + dbUser + " --databases " + db);
+                    sql = Execs.exec("mysqldump -u" + dbUser + " --databases " + db, 60 * 1000 * 5);
                 }
             } catch (final Exception e) {
                 LOGGER.log(Level.ERROR, "Export failed", e);
@@ -320,10 +289,8 @@ public class AdminConsole {
                 return;
             }
         } else if (Latkes.RuntimeDatabase.H2 == runtimeDatabase) {
-            final Connection connection = Connections.getConnection();
-            final Statement statement = connection.createStatement();
-
-            try {
+            try (final Connection connection = Connections.getConnection();
+                 final Statement statement = connection.createStatement()) {
                 final StringBuilder sqlBuilder = new StringBuilder();
                 final ResultSet resultSet = statement.executeQuery("SCRIPT");
                 while (resultSet.next()) {
@@ -331,7 +298,6 @@ public class AdminConsole {
                     sqlBuilder.append(stmt).append(Strings.LINE_SEPARATOR);
                 }
                 resultSet.close();
-                statement.close();
 
                 sql = sqlBuilder.toString();
             } catch (final Exception e) {
@@ -339,10 +305,6 @@ public class AdminConsole {
                 context.renderJSON().renderMsg("Export failed, please check log");
 
                 return;
-            } finally {
-                if (null != connection) {
-                    connection.close();
-                }
             }
         } else {
             context.renderJSON().renderMsg("Just support MySQL/H2 export now");
@@ -394,21 +356,21 @@ public class AdminConsole {
     /**
      * Exports data as JSON zip file.
      *
-     * @param request  the specified HTTP servlet request
-     * @param response the specified HTTP servlet response
-     * @param context  the specified HTTP request context
-     * @throws Exception exception
+     * @param context the specified HTTP request context
      */
-    @RequestProcessing(value = "/console/export/json", method = HTTPRequestMethod.GET)
-    public void exportJSON(final HttpServletRequest request, final HttpServletResponse response, final HTTPRequestContext context)
-            throws Exception {
-        if (!userQueryService.isAdminLoggedIn(request)) {
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
+    public void exportJSON(final RequestContext context) {
+        final HttpServletResponse response = context.getResponse();
+        if (!Solos.isAdminLoggedIn(context)) {
+            context.sendError(HttpServletResponse.SC_UNAUTHORIZED);
 
             return;
         }
 
-        Thread.sleep(550);
+        try {
+            Thread.sleep(550);
+        } catch (final Exception e) {
+            // ignored
+        }
 
         final String tmpDir = System.getProperty("java.io.tmpdir");
         final String date = DateFormatUtils.format(new Date(), "yyyyMMddHHmmss");
@@ -444,21 +406,21 @@ public class AdminConsole {
     /**
      * Exports data as Hexo markdown zip file.
      *
-     * @param request  the specified HTTP servlet request
-     * @param response the specified HTTP servlet response
-     * @param context  the specified HTTP request context
-     * @throws Exception exception
+     * @param context the specified HTTP request context
      */
-    @RequestProcessing(value = "/console/export/hexo", method = HTTPRequestMethod.GET)
-    public void exportHexo(final HttpServletRequest request, final HttpServletResponse response, final HTTPRequestContext context)
-            throws Exception {
-        if (!userQueryService.isAdminLoggedIn(request)) {
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
+    public void exportHexo(final RequestContext context) {
+        final HttpServletResponse response = context.getResponse();
+        if (!Solos.isAdminLoggedIn(context)) {
+            context.sendError(HttpServletResponse.SC_UNAUTHORIZED);
 
             return;
         }
 
-        Thread.sleep(550);
+        try {
+            Thread.sleep(550);
+        } catch (final Exception e) {
+            // ignored
+        }
 
         final String tmpDir = System.getProperty("java.io.tmpdir");
         final String date = DateFormatUtils.format(new Date(), "yyyyMMddHHmmss");
@@ -517,18 +479,14 @@ public class AdminConsole {
      * @param dataModel        the specified data model
      */
     private void fireFreeMarkerActionEvent(final String hostTemplateName, final Map<String, Object> dataModel) {
-        try {
-            final ViewLoadEventData data = new ViewLoadEventData();
+        final ViewLoadEventData data = new ViewLoadEventData();
 
-            data.setViewName(hostTemplateName);
-            data.setDataModel(dataModel);
-            eventManager.fireEventSynchronously(new Event<>(Keys.FREEMARKER_ACTION, data));
-            if (StringUtils.isBlank((String) dataModel.get(Plugin.PLUGINS))) {
-                // There is no plugin for this template, fill ${plugins} with blank.
-                dataModel.put(Plugin.PLUGINS, "");
-            }
-        } catch (final EventException e) {
-            LOGGER.log(Level.WARN, "Event[FREEMARKER_ACTION] handle failed, ignores this exception for kernel health", e);
+        data.setViewName(hostTemplateName);
+        data.setDataModel(dataModel);
+        eventManager.fireEventSynchronously(new Event<>(Keys.FREEMARKER_ACTION, data));
+        if (StringUtils.isBlank((String) dataModel.get(Plugin.PLUGINS))) {
+            // There is no plugin for this template, fill ${plugins} with blank.
+            dataModel.put(Plugin.PLUGINS, "");
         }
     }
 

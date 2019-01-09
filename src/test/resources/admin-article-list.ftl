@@ -1,7 +1,7 @@
 <#--
 
     Solo - A small and beautiful blogging system written in Java.
-    Copyright (c) 2010-2018, b3log.org & hacpai.com
+    Copyright (c) 2010-2019, b3log.org & hacpai.com
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -17,6 +17,10 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 -->
+<div class="form margin12">
+    <input type="text" id="articleListInput">
+    <button class="search-btn" id="articleListBtn">${searchLabel}</button>
+</div>
 <div id="articleTable">
 </div>
 <div id="articlePagination" class="right margin12">

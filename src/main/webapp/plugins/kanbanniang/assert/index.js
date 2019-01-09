@@ -27,7 +27,7 @@ var soloKanbanniang = {
       }
       var dialog = this;
       var x = event.clientX - parseInt(dialog.style.left || 0),
-        y = event.clientY - parseInt(dialog.style.top || 0);
+        y = event.clientY - parseInt(dialog.style.top ||  $(window).height() - $(dialog).height());
       _document.ondragstart = "return false;";
       _document.onselectstart = "return false;";
       _document.onselect = "document.selection.empty();";
@@ -53,8 +53,8 @@ var soloKanbanniang = {
         if (positionY < 0) {
           positionY = 0;
         }
-        if (positionY > $('html').height() - $(dialog).height()) {
-          positionY = $('html').height() - $(dialog).height();
+        if (positionY > $(window).height() - $(dialog).height()) {
+          positionY = $(window).height() - $(dialog).height();
         }
         dialog.style.left = positionX + "px";
         dialog.style.top = positionY + "px";
@@ -117,7 +117,7 @@ var soloKanbanniang = {
     });
 
     $('#soloKanbanniangRSS').click(function() {
-      window.location = latkeConfig.servePath + '/blog-articles-rss.do';
+      window.location = latkeConfig.servePath + '/rss.xml';
     });
 
     $('#soloKanbanniangGithub').click(function() {

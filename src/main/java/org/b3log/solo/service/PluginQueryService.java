@@ -1,6 +1,6 @@
 /*
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -17,7 +17,7 @@
  */
 package org.b3log.solo.service;
 
-import org.b3log.latke.ioc.inject.Inject;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.model.Pagination;
@@ -55,7 +55,7 @@ public class PluginQueryService {
      */
     @Inject
     private PluginRepository pluginRepository;
-    
+
     /**
      * Plugin manager.
      */
@@ -66,13 +66,10 @@ public class PluginQueryService {
      * Gets plugins by the specified request json object.
      *
      * @param requestJSONObject the specified request json object, for example,
-     * <pre>
-     * {
-     *     "paginationCurrentPageNum": 1,
-     *     "paginationPageSize": 20,
-     *     "paginationWindowSize": 10,
-     * }, see {@link Pagination} for more details
-     * </pre>
+     *                          "paginationCurrentPageNum": 1,
+     *                          "paginationPageSize": 20,
+     *                          "paginationWindowSize": 10,
+     *                          see {@link Pagination} for more details
      * @return for example,
      * <pre>
      * {
@@ -92,7 +89,7 @@ public class PluginQueryService {
      * @see Pagination
      */
     public JSONObject getPlugins(final JSONObject requestJSONObject)
-        throws ServiceException {
+            throws ServiceException {
         final JSONObject ret = new JSONObject();
 
         try {
@@ -134,11 +131,11 @@ public class PluginQueryService {
 
     /**
      * get the setting(json formatter) of the plugin by the specified pluginoId.
-     * 
+     *
      * @param pluginId the specified pluginId
      * @return the {@link AbstractPlugin}
      * @throws ServiceException service exception
-     * @throws JSONException json exception
+     * @throws JSONException    json exception
      */
     public String getPluginSetting(final String pluginId) throws ServiceException, JSONException {
 
@@ -162,7 +159,7 @@ public class PluginQueryService {
 
     /**
      * Sets the plugin repository with the specified plugin repository.
-     * 
+     *
      * @param pluginRepository the specified plugin repository
      */
     public void setPluginRepository(final PluginRepository pluginRepository) {

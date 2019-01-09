@@ -1,6 +1,6 @@
 /**
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -19,7 +19,7 @@
 * admin style
 *
 * @author <a href="http://vanessa.b3log.org">Liyuan Li</a>
-* @version 2.5.0.0, Apr 5, 2018
+* @version 2.5.1.0, Jan 4, 2019
 */
 
 /* start resset */
@@ -51,10 +51,11 @@ a:hover {
 }
 
 .content-reset {
-    font-family: "Helvetica Neue", "Luxi Sans", "DejaVu Sans", Tahoma, "Hiragino Sans GB", "Microsoft Yahei", sans-serif;
     word-wrap: break-word;
-    overflow: hidden;
-    line-height: 1.5;
+    overflow: auto;
+    line-height: 1.65;
+    font-size: 16px;
+    word-break: break-word;
 }
 
 .content-reset ul,
@@ -62,6 +63,19 @@ a:hover {
     padding-left: 2em;
     margin-top: 0;
     margin-bottom: 16px;
+}
+
+.content-reset li {
+    margin-top: 0.25em;
+}
+
+.content-reset img {
+    cursor: zoom-in;
+}
+
+.content-reset img.emoji {
+    cursor: auto;
+    max-width: 18px;
 }
 
 .content-reset h1,
@@ -78,12 +92,14 @@ a:hover {
 
 .content-reset h1 {
     padding-bottom: 0.3em;
-    font-size: 2em;
+    font-size: 1.7em;
+    border-bottom: 1px solid #eee;
 }
 
 .content-reset h2 {
     padding-bottom: 0.3em;
     font-size: 1.5em;
+    border-bottom: 1px solid #eee;
 }
 
 .content-reset h3 {
@@ -102,6 +118,14 @@ a:hover {
     font-size: 0.85em;
 }
 
+.content-reset hr {
+    height: 0.15em;
+    padding: 0;
+    margin: 24px 0;
+    background-color: #e7e7e7;
+    border: 0;
+}
+
 .content-reset p {
     margin-top: 0;
     margin-bottom: 16px;
@@ -118,8 +142,12 @@ a:hover {
     margin: 0;
 }
 
+.content-reset ins > iframe {
+    border: 0;
+}
+
 .content-reset iframe {
-    border: 1px solid #ccc;
+    border: 1px solid rgba(0, 0, 0, 0.38);
 }
 
 .content-reset table {
@@ -161,18 +189,24 @@ a:hover {
     font-size: 85%;
     background-color: rgba(252, 41, 41, 0.12);
     border-radius: 3px;
-    color: #d23f31;
-    font-family: mononoki, Consolas, "Liberation Mono", Menlo, Courier, monospace;
+    word-break: break-word;
+}
+
+.content-reset pre {
+    position: relative;
+}
+
+.content-reset pre textarea {
+    position: absolute;
+    top: -100000px;
 }
 
 .content-reset pre > code {
     padding: 0.5em;
-    border-radius: 0;
-    color: #333;
     background-color: rgba(0, 0, 0, 0.04);
-    background-image: url(../images/code-bg.png);
     background-size: 20px 20px;
     border-radius: 5px;
+    display: block;
 }
 
 .content-reset kbd {
@@ -183,19 +217,16 @@ a:hover {
     color: #555;
     vertical-align: middle;
     background-color: #fcfcfc;
-    border: solid 1px #ccc;
+    border: solid 1px rgba(0, 0, 0, 0.38);
     border-bottom-color: #bbb;
     border-radius: 3px;
     box-shadow: inset 0 -1px 0 #bbb;
 }
 
-.content-reset img {
-    max-width: 100%;
-    vertical-align: middle;
-    border: 0;
-    height: auto;
-    overflow: hidden;
-    font-size: 12px;
+.content-reset__task,
+.content-reset .task-list-item {
+    list-style: none;
+    margin-left: -1em;
 }
 
 .tooltipped {
@@ -954,7 +985,9 @@ a[class*=" icon-"]:hover {
     height: auto;
 }
 
-.form input[type='text']:focus, .form input[type='password']:focus, .form textarea:focus {
+.form input[type='text']:focus,
+.form input[type='radio']:focus,
+.form input[type='password']:focus, .form textarea:focus {
     box-shadow: none;
     border-color: #1fb5ad;
 }
@@ -1250,18 +1283,15 @@ button#submitArticle:hover {
     color: #FFFFFF;
     float: left;
     font-size: 12px;
-    line-height: 27px;
-    margin-left: 3px;
+    margin-left: 12px;
 }
 
 .dialog-header-bg {
-    background: #F1F1F1;
-    border-color: #C0C0C0 #D9D9D9 #D9D9D9;
+    background: #32323a;
     border-radius: 6px 6px 0 0;
-    border-style: solid;
-    border-width: 1px 1px 0;
     cursor: move;
     height: 34px;
+    line-height: 34px;
 }
 
 .dialog-header-bg .icon-close {
@@ -1430,7 +1460,6 @@ button#submitArticle:hover {
 #preferenceSignButton3 {
     margin: 10px 0;
 }
-
 
 #tabPreferencePanel label,
 #tabPreferencePanel_setting label,

@@ -1,6 +1,6 @@
 /*
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -19,7 +19,6 @@ package org.b3log.solo.model;
 
 import org.apache.commons.lang.StringUtils;
 import org.b3log.latke.Keys;
-import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -30,7 +29,8 @@ import java.util.Set;
  * This class defines option model relevant keys.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.3.0.9, Sep 21, 2018
+ * @author <a href="https://github.com/hzchendou">hzchendou</a>
+ * @version 1.5.0.0, Dec 23, 2018
  * @since 0.6.0
  */
 public final class Option {
@@ -57,9 +57,19 @@ public final class Option {
 
     // oId constants
     /**
+     * Key of custom vars.
+     */
+    public static final String ID_C_CUSTOM_VARS = "customVars";
+
+    /**
      * Key of broadcast chance expiration time.
      */
     public static final String ID_C_BROADCAST_CHANCE_EXPIRATION_TIME = "broadcastChanceExpirationTime";
+
+    /**
+     * Key of cloud object storage service (公有云对象存储服务提供商).
+     */
+    public static final String ID_C_CLOUD_STORAGE_KEY = "ossServer";
 
     /**
      * Key of Qiniu access key.
@@ -80,6 +90,26 @@ public final class Option {
      * Key of Qiniu bucket.
      */
     public static final String ID_C_QINIU_BUCKET = "qiniuBucket";
+
+    /**
+     * key of Aliyun access key
+     */
+    public static final String ID_C_ALIYUN_ACCESS_KEY = "aliyunAccessKey";
+
+    /**
+     * Key of Aliyun secret key.
+     */
+    public static final String ID_C_ALIYUN_SECRET_KEY = "aliyunSecretKey";
+
+    /**
+     * key of Aliyun domain
+     */
+    public static final String ID_C_ALIYUN_DOMAIN = "aliyunDomain";
+
+    /**
+     * key of Aliyun bucket
+     */
+    public static final String ID_C_ALIYUN_BUCKET = "aliyunBucket";
 
     /**
      * Key of blog title.
@@ -326,6 +356,16 @@ public final class Option {
     public static final String CATEGORY_C_QINIU = "qiniu";
 
     /**
+     * Aliyun
+     */
+    public static final String CATEGORY_C_ALIYUN = "aliyun";
+
+    /**
+     * Cloud object storage
+     */
+    public static final String CATEGORY_C_CLOU_STORAGE = "cloudStorage";
+
+    /**
      * Preference.
      */
     public static final String CATEGORY_C_PREFERENCE = "preference";
@@ -360,10 +400,15 @@ public final class Option {
      * Default preference.
      *
      * @author <a href="http://88250.b3log.org">Liang Ding</a>
-     * @version 2.1.0.9, Nov 23, 2015
+     * @version 2.2.0.0, Dec 10, 2018
      * @since 0.3.1
      */
     public static final class DefaultPreference {
+
+        /**
+         * Default custom vars.
+         */
+        public static final String DEFAULT_CUSTOM_VARS = "key0=val0|key1=val1|key2=val2";
 
         /**
          * Default recent article display count.
@@ -403,7 +448,7 @@ public final class Option {
         /**
          * Default skin directory name.
          */
-        public static final String DEFAULT_SKIN_DIR_NAME = "Medium";
+        public static final String DEFAULT_SKIN_DIR_NAME = "Jane";
 
         /**
          * Default language.
@@ -526,28 +571,22 @@ public final class Option {
             final JSONArray signs = new JSONArray();
             final int signLength = 4;
 
-            try {
-                for (int i = 0; i < signLength; i++) {
-                    final JSONObject sign = new JSONObject();
-                    sign.put(Keys.OBJECT_ID, i);
-                    signs.put(sign);
-                    sign.put(Sign.SIGN_HTML, "");
-                }
-
-                // Sign(id=0) is the 'empty' sign, used for article user needn't a sign
-                DEFAULT_SIGNS = signs.toString();
-
-                final JSONObject replyNotificationTemplate = new JSONObject();
-                replyNotificationTemplate.put("subject", "${blogTitle}: New reply of your comment");
-                replyNotificationTemplate.put("body",
-                        "Your comment on post[<a href='${postLink}'>" + "${postTitle}</a>] received an reply: <p>${replier}"
-                                + ": <span><a href='${replyURL}'>${replyContent}</a></span></p>");
-                DEFAULT_REPLY_NOTIFICATION_TEMPLATE = replyNotificationTemplate.toString();
-            } catch (final Exception e) {
-                LOGGER.log(Level.ERROR, "Creates sign error!", e);
-
-                throw new IllegalStateException(e);
+            for (int i = 0; i < signLength; i++) {
+                final JSONObject sign = new JSONObject();
+                sign.put(Keys.OBJECT_ID, i);
+                signs.put(sign);
+                sign.put(Sign.SIGN_HTML, "");
             }
+
+            // Sign(id=0) is the 'empty' sign, used for article user needn't a sign
+            DEFAULT_SIGNS = signs.toString();
+
+            final JSONObject replyNotificationTemplate = new JSONObject();
+            replyNotificationTemplate.put("subject", "${blogTitle}: New reply of your comment");
+            replyNotificationTemplate.put("body",
+                    "Your comment on post[<a href='${postLink}'>" + "${postTitle}</a>] received an reply: <p>${replier}"
+                            + ": <span><a href='${replyURL}'>${replyContent}</a></span></p>");
+            DEFAULT_REPLY_NOTIFICATION_TEMPLATE = replyNotificationTemplate.toString();
         }
 
         /**

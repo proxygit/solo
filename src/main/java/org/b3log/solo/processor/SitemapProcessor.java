@@ -1,6 +1,6 @@
 /*
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -21,18 +21,18 @@ import org.apache.commons.lang.StringEscapeUtils;
 import org.apache.commons.lang.time.DateFormatUtils;
 import org.b3log.latke.Keys;
 import org.b3log.latke.Latkes;
-import org.b3log.latke.ioc.inject.Inject;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.repository.FilterOperator;
 import org.b3log.latke.repository.PropertyFilter;
 import org.b3log.latke.repository.Query;
 import org.b3log.latke.repository.SortDirection;
-import org.b3log.latke.servlet.HTTPRequestContext;
-import org.b3log.latke.servlet.HTTPRequestMethod;
+import org.b3log.latke.servlet.HttpMethod;
+import org.b3log.latke.servlet.RequestContext;
 import org.b3log.latke.servlet.annotation.RequestProcessing;
 import org.b3log.latke.servlet.annotation.RequestProcessor;
-import org.b3log.latke.servlet.renderer.TextXMLRenderer;
+import org.b3log.latke.servlet.renderer.TextXmlRenderer;
 import org.b3log.latke.util.XMLs;
 import org.b3log.solo.model.ArchiveDate;
 import org.b3log.solo.model.Article;
@@ -41,9 +41,9 @@ import org.b3log.solo.model.Tag;
 import org.b3log.solo.model.sitemap.Sitemap;
 import org.b3log.solo.model.sitemap.URL;
 import org.b3log.solo.repository.ArchiveDateRepository;
+import org.b3log.solo.repository.ArticleRepository;
 import org.b3log.solo.repository.PageRepository;
 import org.b3log.solo.repository.TagRepository;
-import org.b3log.solo.repository.impl.ArticleRepositoryImpl;
 import org.b3log.solo.service.PreferenceQueryService;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -55,7 +55,7 @@ import java.net.URLEncoder;
  * Sitemap processor.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.0.2.3, Sep 20, 2018
+ * @version 1.0.2.5, Dec 3, 2018
  * @since 0.3.1
  */
 @RequestProcessor
@@ -76,7 +76,7 @@ public class SitemapProcessor {
      * Article repository.
      */
     @Inject
-    private ArticleRepositoryImpl articleRepository;
+    private ArticleRepository articleRepository;
 
     /**
      * Page repository.
@@ -100,31 +100,27 @@ public class SitemapProcessor {
      * Returns the sitemap.
      *
      * @param context the specified context
-     * @throws Exception exception
      */
-    @RequestProcessing(value = "/sitemap.xml", method = HTTPRequestMethod.GET)
-    public void sitemap(final HTTPRequestContext context) throws Exception {
-        final TextXMLRenderer renderer = new TextXMLRenderer();
-
+    @RequestProcessing(value = "/sitemap.xml", method = HttpMethod.GET)
+    public void sitemap(final RequestContext context) {
+        final TextXmlRenderer renderer = new TextXmlRenderer();
         context.setRenderer(renderer);
 
-        final Sitemap sitemap = new Sitemap();
-
         try {
+            final Sitemap sitemap = new Sitemap();
             addArticles(sitemap);
             addNavigations(sitemap);
             addTags(sitemap);
             addArchives(sitemap);
 
-            LOGGER.log(Level.INFO, "Generating sitemap....");
             String content = sitemap.toString();
             content = XMLs.format(content);
             LOGGER.log(Level.INFO, "Generated sitemap");
             renderer.setContent(content);
         } catch (final Exception e) {
-            LOGGER.log(Level.ERROR, "Get blog article feed error", e);
+            LOGGER.log(Level.ERROR, "Generates sitemap failed", e);
 
-            context.getResponse().sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+            context.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
         }
     }
 

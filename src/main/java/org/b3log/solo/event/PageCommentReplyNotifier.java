@@ -1,6 +1,6 @@
 /*
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -22,24 +22,19 @@ import org.b3log.latke.Keys;
 import org.b3log.latke.Latkes;
 import org.b3log.latke.event.AbstractEventListener;
 import org.b3log.latke.event.Event;
-import org.b3log.latke.event.EventException;
-import org.b3log.latke.ioc.LatkeBeanManager;
-import org.b3log.latke.ioc.Lifecycle;
-import org.b3log.latke.ioc.inject.Named;
-import org.b3log.latke.ioc.inject.Singleton;
+import org.b3log.latke.ioc.BeanManager;
+import org.b3log.latke.ioc.Singleton;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
-import org.b3log.latke.mail.MailService;
-import org.b3log.latke.mail.MailService.Message;
-import org.b3log.latke.mail.MailServiceFactory;
 import org.b3log.latke.util.Strings;
+import org.b3log.solo.mail.MailService;
+import org.b3log.solo.mail.MailServiceFactory;
 import org.b3log.solo.model.Comment;
 import org.b3log.solo.model.Option;
 import org.b3log.solo.model.Page;
 import org.b3log.solo.repository.CommentRepository;
-import org.b3log.solo.repository.impl.CommentRepositoryImpl;
 import org.b3log.solo.service.PreferenceQueryService;
-import org.b3log.solo.util.Mails;
+import org.b3log.solo.util.Solos;
 import org.json.JSONObject;
 
 /**
@@ -49,7 +44,6 @@ import org.json.JSONObject;
  * @version 1.0.2.6, Sep 25, 2018
  * @since 0.3.1
  */
-@Named
 @Singleton
 public class PageCommentReplyNotifier extends AbstractEventListener<JSONObject> {
 
@@ -69,7 +63,7 @@ public class PageCommentReplyNotifier extends AbstractEventListener<JSONObject> 
         final JSONObject comment = eventData.optJSONObject(Comment.COMMENT);
         final JSONObject page = eventData.optJSONObject(Page.PAGE);
 
-        LOGGER.log(Level.DEBUG, "Processing an event[type={0}, data={1}] in listener[className={2}]",
+        LOGGER.log(Level.DEBUG, "Processing an event [type={0}, data={1}] in listener [className={2}]",
                 event.getType(), eventData, PageCommentReplyNotifier.class.getName());
         final String originalCommentId = comment.optString(Comment.COMMENT_ORIGINAL_COMMENT_ID);
 
@@ -78,13 +72,13 @@ public class PageCommentReplyNotifier extends AbstractEventListener<JSONObject> 
             return;
         }
 
-        if (!Mails.isConfigured()) {
+        if (!Solos.isMailConfigured()) {
             return;
         }
 
-        final LatkeBeanManager beanManager = Lifecycle.getBeanManager();
+        final BeanManager beanManager = BeanManager.getInstance();
         final PreferenceQueryService preferenceQueryService = beanManager.getReference(PreferenceQueryService.class);
-        final CommentRepository commentRepository = beanManager.getReference(CommentRepositoryImpl.class);
+        final CommentRepository commentRepository = beanManager.getReference(CommentRepository.class);
 
         try {
             final String commentEmail = comment.getString(Comment.COMMENT_EMAIL);
@@ -101,7 +95,9 @@ public class PageCommentReplyNotifier extends AbstractEventListener<JSONObject> 
 
             final JSONObject preference = preferenceQueryService.getPreference();
             if (null == preference) {
-                throw new EventException("Not found preference");
+                LOGGER.log(Level.ERROR, "Not found preference");
+
+                return;
             }
 
             final String blogTitle = preference.getString(Option.ID_C_BLOG_TITLE);
@@ -109,7 +105,7 @@ public class PageCommentReplyNotifier extends AbstractEventListener<JSONObject> 
 
             final String commentContent = comment.getString(Comment.COMMENT_CONTENT);
             final String commentSharpURL = comment.getString(Comment.COMMENT_SHARP_URL);
-            final Message message = new Message();
+            final MailService.Message message = new MailService.Message();
 
             message.setFrom(adminEmail);
             message.addRecipient(originalCommentEmail);

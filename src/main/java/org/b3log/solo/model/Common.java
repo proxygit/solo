@@ -1,6 +1,6 @@
 /*
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -22,10 +22,15 @@ package org.b3log.solo.model;
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
  * @author <a href="mailto:dongxu.wang@acm.org">Dongxu Wang</a>
- * @version 1.6.0.0, Sep 12, 2017
+ * @version 1.7.0.0, Jan 3, 2019
  * @since 0.3.1
  */
 public final class Common {
+
+    /**
+     * Key of marked engine available.
+     */
+    public static final String MARKED_AVAILABLE = "markedAvailable";
 
     /**
      * Key of keyword.

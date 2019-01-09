@@ -1,6 +1,6 @@
 /*
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -20,24 +20,19 @@ package org.b3log.solo.filter;
 import org.apache.commons.lang.StringUtils;
 import org.b3log.latke.Keys;
 import org.b3log.latke.Latkes;
-import org.b3log.latke.ioc.LatkeBeanManager;
-import org.b3log.latke.ioc.Lifecycle;
+import org.b3log.latke.ioc.BeanManager;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.repository.RepositoryException;
 import org.b3log.latke.servlet.DispatcherServlet;
-import org.b3log.latke.servlet.HTTPRequestContext;
-import org.b3log.latke.servlet.HTTPRequestMethod;
-import org.b3log.latke.servlet.HttpControl;
-import org.b3log.latke.servlet.renderer.HTTP500Renderer;
+import org.b3log.latke.servlet.HttpMethod;
+import org.b3log.latke.servlet.RequestContext;
 import org.b3log.solo.model.Article;
 import org.b3log.solo.model.Page;
 import org.b3log.solo.repository.ArticleRepository;
 import org.b3log.solo.repository.PageRepository;
-import org.b3log.solo.repository.impl.ArticleRepositoryImpl;
-import org.b3log.solo.repository.impl.PageRepositoryImpl;
-import org.b3log.solo.service.ArticleQueryService;
 import org.b3log.solo.service.PermalinkQueryService;
+import org.b3log.solo.util.Solos;
 import org.json.JSONObject;
 
 import javax.servlet.*;
@@ -49,10 +44,9 @@ import java.io.IOException;
  * Article/Page permalink filter.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.0.1.7, Jan 8, 2013
- * @see org.b3log.solo.processor.ArticleProcessor#showArticle(org.b3log.latke.servlet.HTTPRequestContext,
- * javax.servlet.http.HttpServletRequest, javax.servlet.http.HttpServletResponse)
- * @see org.b3log.solo.processor.PageProcessor#showPage(org.b3log.latke.servlet.HTTPRequestContext)
+ * @version 1.0.1.8, Oct 5, 2018
+ * @see org.b3log.solo.processor.ArticleProcessor#showArticle(org.b3log.latke.servlet.RequestContext)
+ * @see org.b3log.solo.processor.PageProcessor#showPage(org.b3log.latke.servlet.RequestContext)
  * @since 0.3.1
  */
 public final class PermalinkFilter implements Filter {
@@ -96,13 +90,13 @@ public final class PermalinkFilter implements Filter {
         JSONObject article;
         JSONObject page = null;
 
-        final LatkeBeanManager beanManager = Lifecycle.getBeanManager();
+        final BeanManager beanManager = BeanManager.getInstance();
 
         try {
-            final ArticleRepository articleRepository = beanManager.getReference(ArticleRepositoryImpl.class);
+            final ArticleRepository articleRepository = beanManager.getReference(ArticleRepository.class);
             article = articleRepository.getByPermalink(permalink);
             if (null == article) {
-                final PageRepository pageRepository = beanManager.getReference(PageRepositoryImpl.class);
+                final PageRepository pageRepository = beanManager.getReference(PageRepository.class);
                 page = pageRepository.getByPermalink(permalink);
             }
 
@@ -119,9 +113,8 @@ public final class PermalinkFilter implements Filter {
             return;
         }
 
-        // If requests an article and the article need view passowrd, sends redirect to the password form
-        final ArticleQueryService articleQueryService = beanManager.getReference(ArticleQueryService.class);
-        if (null != article && articleQueryService.needViewPwd(httpServletRequest, article)) {
+        // If requests an article and the article need view password, sends redirect to the password form
+        if (null != article && Solos.needViewPwd(httpServletRequest, httpServletResponse, article)) {
             try {
                 httpServletResponse.sendRedirect(Latkes.getServePath() + "/console/article-pwd?articleId=" + article.optString(Keys.OBJECT_ID));
 
@@ -134,6 +127,7 @@ public final class PermalinkFilter implements Filter {
         }
 
         dispatchToArticleOrPageProcessor(request, response, article, page);
+        chain.doFilter(request, response);
     }
 
     /**
@@ -144,12 +138,11 @@ public final class PermalinkFilter implements Filter {
      * @param response the specified response
      * @param article  the specified article
      * @param page     the specified page
-     * @throws IOException io exception
-     * @see DispatcherServlet#result(HTTPRequestContext)
+     * @see DispatcherServlet#result(RequestContext)
      */
     private void dispatchToArticleOrPageProcessor(final ServletRequest request, final ServletResponse response,
-                                                  final JSONObject article, final JSONObject page) throws IOException {
-        final HTTPRequestContext context = new HTTPRequestContext();
+                                                  final JSONObject article, final JSONObject page) {
+        final RequestContext context = new RequestContext();
         context.setRequest((HttpServletRequest) request);
         context.setResponse((HttpServletResponse) response);
 
@@ -160,17 +153,7 @@ public final class PermalinkFilter implements Filter {
             request.setAttribute(Page.PAGE, page);
             request.setAttribute(Keys.HttpRequest.REQUEST_URI, Latkes.getContextPath() + "/page");
         }
-
-        request.setAttribute(Keys.HttpRequest.REQUEST_METHOD, HTTPRequestMethod.GET.name());
-
-        final HttpControl httpControl = new HttpControl(DispatcherServlet.SYS_HANDLER.iterator(), context);
-        try {
-            httpControl.nextHandler();
-        } catch (final Exception e) {
-            context.setRenderer(new HTTP500Renderer(e));
-        }
-
-        DispatcherServlet.result(context);
+        request.setAttribute(Keys.HttpRequest.REQUEST_METHOD, HttpMethod.GET.name());
     }
 
     @Override

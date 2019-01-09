@@ -1,6 +1,6 @@
 /*
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -24,7 +24,7 @@ import org.apache.commons.lang.time.DateFormatUtils;
 import org.apache.commons.lang.time.DateUtils;
 import org.b3log.latke.Keys;
 import org.b3log.latke.Latkes;
-import org.b3log.latke.ioc.inject.Inject;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.model.Role;
@@ -32,23 +32,27 @@ import org.b3log.latke.model.User;
 import org.b3log.latke.plugin.PluginManager;
 import org.b3log.latke.repository.RepositoryException;
 import org.b3log.latke.repository.Transaction;
+import org.b3log.latke.repository.jdbc.util.Connections;
 import org.b3log.latke.repository.jdbc.util.JdbcRepositories;
 import org.b3log.latke.repository.jdbc.util.JdbcRepositories.CreateTableResult;
 import org.b3log.latke.service.LangPropsService;
 import org.b3log.latke.service.ServiceException;
 import org.b3log.latke.service.annotation.Service;
 import org.b3log.latke.util.Ids;
-import org.b3log.latke.util.freemarker.Templates;
 import org.b3log.solo.SoloServletListener;
 import org.b3log.solo.model.*;
 import org.b3log.solo.model.Option.DefaultPreference;
 import org.b3log.solo.repository.*;
-import org.b3log.solo.util.*;
+import org.b3log.solo.util.Images;
+import org.b3log.solo.util.Skins;
+import org.b3log.solo.util.Solos;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import javax.servlet.ServletContext;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.text.ParseException;
 import java.util.List;
 import java.util.Set;
@@ -57,7 +61,7 @@ import java.util.Set;
  * Solo initialization service.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.5.2.23, Sep 16, 2018
+ * @version 1.5.2.26, Dec 10, 2018
  * @since 0.4.0
  */
 @Service
@@ -72,11 +76,6 @@ public class InitService {
      * Maximum count of initialization.
      */
     private static final int MAX_RETRIES_CNT = 3;
-
-    /**
-     * Initialized time zone id.
-     */
-    private static final String INIT_TIME_ZONE_ID = "Asia/Shanghai";
 
     /**
      * Option repository.
@@ -151,17 +150,39 @@ public class InitService {
     private PluginManager pluginManager;
 
     /**
+     * Flag of init status.
+     */
+    private static boolean inited;
+
+    /**
+     * Flag of printed init prompt.
+     */
+    private static boolean printedInitMsg;
+
+    /**
      * Determines Solo had been initialized.
      *
      * @return {@code true} if it had been initialized, {@code false} otherwise
      */
     public boolean isInited() {
-        try {
-            final JSONObject admin = userRepository.getAdmin();
+        if (inited) {
+            return true;
+        }
 
-            return null != admin;
-        } catch (final RepositoryException e) {
-            LOGGER.log(Level.WARN, "Solo has not been initialized");
+        try (final Connection connection = Connections.getConnection()) {
+            final PreparedStatement preparedStatement = connection.prepareStatement("SELECT COUNT(1) AS `c` FROM `" + userRepository.getName() + "`");
+            final ResultSet resultSet = preparedStatement.executeQuery();
+            resultSet.next();
+            final int c = resultSet.getInt("c");
+            inited = 0 < c;
+
+            return inited;
+        } catch (final Exception e) {
+            if (!printedInitMsg) {
+                LOGGER.log(Level.WARN, "Solo has not been initialized, please open your browser and visit [" + Latkes.getServePath() + "] to init Solo");
+            }
+            printedInitMsg = true;
+
             return false;
         }
     }
@@ -478,7 +499,7 @@ public class InitService {
         admin.put(UserExt.USER_PUBLISHED_ARTICLE_COUNT, 0);
         String avatar = requestJSONObject.optString(UserExt.USER_AVATAR);
         if (StringUtils.isBlank(avatar)) {
-            avatar = Thumbnails.getGravatarURL(requestJSONObject.getString(User.USER_EMAIL), "128");
+            avatar = Solos.getGravatarURL(requestJSONObject.getString(User.USER_EMAIL), "128");
         }
         admin.put(UserExt.USER_AVATAR, avatar);
 
@@ -582,6 +603,12 @@ public class InitService {
      */
     private void initPreference(final JSONObject requestJSONObject) throws Exception {
         LOGGER.debug("Initializing preference....");
+
+        final JSONObject customVarsOpt = new JSONObject();
+        customVarsOpt.put(Keys.OBJECT_ID, Option.ID_C_CUSTOM_VARS);
+        customVarsOpt.put(Option.OPTION_CATEGORY, Option.CATEGORY_C_PREFERENCE);
+        customVarsOpt.put(Option.OPTION_VALUE, DefaultPreference.DEFAULT_CUSTOM_VARS);
+        optionRepository.add(customVarsOpt);
 
         final JSONObject noticeBoardOpt = new JSONObject();
         noticeBoardOpt.put(Keys.OBJECT_ID, Option.ID_C_NOTICE_BOARD);
@@ -799,12 +826,6 @@ public class InitService {
         skinsOpt.put(Option.OPTION_CATEGORY, Option.CATEGORY_C_PREFERENCE);
         skinsOpt.put(Option.OPTION_VALUE, skinArray.toString());
         optionRepository.add(skinsOpt);
-
-        final ServletContext servletContext = SoloServletListener.getServletContext();
-
-        Templates.MAIN_CFG.setServletContextForTemplateLoading(servletContext, "/skins/" + skinDirName);
-
-        TimeZones.setTimeZone(INIT_TIME_ZONE_ID);
 
         LOGGER.debug("Initialized preference");
     }

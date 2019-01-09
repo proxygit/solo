@@ -1,6 +1,6 @@
 /*
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -42,7 +42,7 @@ public final class MarkdownsTestCase {
 
     @BeforeClass
     public void beforeClass() {
-        Latkes.initRuntimeEnv();
+        Latkes.init();
         Latkes.setLocale(Locale.SIMPLIFIED_CHINESE);
     }
 
@@ -66,7 +66,7 @@ public final class MarkdownsTestCase {
         //System.out.println(path);
 
         final StringBuilder markdownTextBuilder = new StringBuilder();
-        @SuppressWarnings("unchecked") final List<String> lines = IOUtils.readLines(new FileInputStream(path));
+        final List<String> lines = IOUtils.readLines(new FileInputStream(path), "UTF-8");
 
         for (final String line : lines) {
             markdownTextBuilder.append(line).append(Strings.LINE_SEPARATOR);

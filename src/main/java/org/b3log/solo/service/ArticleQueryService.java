@@ -1,6 +1,6 @@
 /*
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -19,7 +19,7 @@ package org.b3log.solo.service;
 
 import org.apache.commons.lang.StringUtils;
 import org.b3log.latke.Keys;
-import org.b3log.latke.ioc.inject.Inject;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.model.Pagination;
@@ -29,6 +29,7 @@ import org.b3log.latke.repository.*;
 import org.b3log.latke.service.LangPropsService;
 import org.b3log.latke.service.ServiceException;
 import org.b3log.latke.service.annotation.Service;
+import org.b3log.latke.servlet.RequestContext;
 import org.b3log.latke.util.CollectionUtils;
 import org.b3log.latke.util.Paginator;
 import org.b3log.latke.util.Stopwatchs;
@@ -36,12 +37,11 @@ import org.b3log.solo.model.*;
 import org.b3log.solo.repository.*;
 import org.b3log.solo.util.Emotions;
 import org.b3log.solo.util.Markdowns;
+import org.b3log.solo.util.Solos;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpSession;
 import java.util.*;
 
 import static org.b3log.solo.model.Article.*;
@@ -53,7 +53,7 @@ import static org.b3log.solo.model.Article.*;
  * @author <a href="http://blog.sweelia.com">ArmstrongCN</a>
  * @author <a href="http://zephyr.b3log.org">Zephyr</a>
  * @author <a href="http://vanessa.b3log.org">Liyuan Li</a>
- * @version 1.3.2.4, Sep 16, 2018
+ * @version 1.3.2.7, Nov 6, 2018
  * @since 0.3.5
  */
 @Service
@@ -160,7 +160,7 @@ public class ArticleQueryService {
 
             final List<JSONObject> articles = CollectionUtils.jsonArrayToList(result.optJSONArray(Keys.RESULTS));
             ret.put(Article.ARTICLES, (Object) articles);
-        } catch (final RepositoryException | ServiceException e) {
+        } catch (final RepositoryException e) {
             LOGGER.log(Level.ERROR, "Searches articles error", e);
         }
 
@@ -237,13 +237,14 @@ public class ArticleQueryService {
 
                 article.put(ARTICLE_CREATE_TIME, article.optLong(ARTICLE_CREATED));
                 article.put(ARTICLE_T_CREATE_DATE, new Date(article.optLong(ARTICLE_CREATED)));
+                article.put(Article.ARTICLE_T_UPDATE_DATE, new Date(article.optLong(ARTICLE_UPDATED)));
 
                 articles.add(article);
             }
             ret.put(Article.ARTICLES, (Object) articles);
 
             return ret;
-        } catch (final RepositoryException | ServiceException e) {
+        } catch (final RepositoryException e) {
             LOGGER.log(Level.ERROR, "Gets category articles error", e);
 
             throw new ServiceException(e);
@@ -251,79 +252,38 @@ public class ArticleQueryService {
     }
 
     /**
-     * Can the current user access an article specified by the given article id?
+     * Can the specified user access an article specified by the given article id?
      *
      * @param articleId the given article id
-     * @param request   the specified request
+     * @param user      the specified user
      * @return {@code true} if the current user can access the article, {@code false} otherwise
      * @throws Exception exception
      */
-    public boolean canAccessArticle(final String articleId, final HttpServletRequest request) throws Exception {
+    public boolean canAccessArticle(final String articleId, final JSONObject user) throws Exception {
         if (StringUtils.isBlank(articleId)) {
             return false;
         }
 
-        if (userQueryService.isAdminLoggedIn(request)) {
+        if (null == user) {
+            return false;
+        }
+
+        if (Role.ADMIN_ROLE.equals(user.optString(User.USER_ROLE))) {
             return true;
         }
 
         final JSONObject article = articleRepository.get(articleId);
-        final String currentUserId = userQueryService.getCurrentUser(request).getString(Keys.OBJECT_ID);
+        final String currentUserId = user.getString(Keys.OBJECT_ID);
 
         return article.getString(Article.ARTICLE_AUTHOR_ID).equals(currentUserId);
-    }
-
-    /**
-     * Checks whether need password to view the specified article with the specified request.
-     * <p>
-     * Checks session, if not represents, checks article property {@link Article#ARTICLE_VIEW_PWD view password}.
-     * </p>
-     * <p>
-     * The blogger itself dose not need view password never.
-     * </p>
-     *
-     * @param request the specified request
-     * @param article the specified article
-     * @return {@code true} if need, returns {@code false} otherwise
-     */
-    public boolean needViewPwd(final HttpServletRequest request, final JSONObject article) {
-        final String articleViewPwd = article.optString(Article.ARTICLE_VIEW_PWD);
-
-        if (StringUtils.isBlank(articleViewPwd)) {
-            return false;
-        }
-
-        if (null == request) {
-            return true;
-        }
-
-        final HttpSession session = request.getSession(false);
-
-        if (null != session) {
-            @SuppressWarnings("unchecked")
-            Map<String, String> viewPwds = (Map<String, String>) session.getAttribute(Common.ARTICLES_VIEW_PWD);
-
-            if (null == viewPwds) {
-                viewPwds = new HashMap<String, String>();
-            }
-
-            if (articleViewPwd.equals(viewPwds.get(article.optString(Keys.OBJECT_ID)))) {
-                return false;
-            }
-        }
-
-        final JSONObject currentUser = userQueryService.getCurrentUser(request);
-
-        return !(null != currentUser && !Role.VISITOR_ROLE.equals(currentUser.optString(User.USER_ROLE)));
     }
 
     /**
      * Gets time of the recent updated article.
      *
      * @return time of the recent updated article, returns {@code 0} if not found
-     * @throws ServiceException service exception
      */
-    public long getRecentArticleTime() throws ServiceException {
+    public long getRecentArticleTime() {
         try {
             final List<JSONObject> recentArticles = articleRepository.getRecentArticles(1);
             if (recentArticles.isEmpty()) {
@@ -334,8 +294,9 @@ public class ArticleQueryService {
 
             return recentArticle.getLong(Article.ARTICLE_UPDATED);
         } catch (final Exception e) {
-            LOGGER.log(Level.ERROR, e.getMessage(), e);
-            throw new ServiceException("Gets recent article time failed");
+            LOGGER.log(Level.ERROR, "Gets recent article time failed", e);
+
+            return 0;
         }
     }
 
@@ -398,10 +359,7 @@ public class ArticleQueryService {
             }
         }
 
-        LOGGER.log(Level.WARN, "Can not find the sign[id={0}], returns a default sign[id=1]", signId);
-        if (null == defaultSign) {
-            throw new IllegalStateException("Can not find the default sign which id equals to 1");
-        }
+        LOGGER.log(Level.WARN, "Can not find the sign [id={0}], returns a default sign [id=1]", signId);
 
         return defaultSign;
     }
@@ -583,10 +541,9 @@ public class ArticleQueryService {
      *      }, ....]
      * }
      * </pre>, order by article update date and sticky(put top).
-     * @throws ServiceException service exception
      * @see Pagination
      */
-    public JSONObject getArticles(final JSONObject requestJSONObject) throws ServiceException {
+    public JSONObject getArticles(final JSONObject requestJSONObject) {
         final JSONObject ret = new JSONObject();
 
         try {
@@ -649,7 +606,7 @@ public class ArticleQueryService {
         } catch (final Exception e) {
             LOGGER.log(Level.ERROR, "Gets articles failed", e);
 
-            throw new ServiceException(e);
+            return null;
         }
     }
 
@@ -698,6 +655,7 @@ public class ArticleQueryService {
 
                 article.put(ARTICLE_CREATE_TIME, article.getLong(ARTICLE_CREATED));
                 article.put(ARTICLE_T_CREATE_DATE, new Date(article.getLong(ARTICLE_CREATED)));
+                article.put(Article.ARTICLE_T_UPDATE_DATE, new Date(article.optLong(ARTICLE_UPDATED)));
 
                 ret.add(article);
             }
@@ -750,6 +708,7 @@ public class ArticleQueryService {
 
                 article.put(ARTICLE_CREATE_TIME, article.getLong(ARTICLE_CREATED));
                 article.put(ARTICLE_T_CREATE_DATE, new Date(article.getLong(ARTICLE_CREATED)));
+                article.put(Article.ARTICLE_T_UPDATE_DATE, new Date(article.optLong(ARTICLE_UPDATED)));
 
                 ret.add(article);
             }
@@ -793,10 +752,8 @@ public class ArticleQueryService {
      * @param article    the specified article
      * @param preference the specified preference
      * @return a list of articles, returns an empty list if not found
-     * @throws ServiceException service exception
      */
-    public List<JSONObject> getRelevantArticles(final JSONObject article, final JSONObject preference)
-            throws ServiceException {
+    public List<JSONObject> getRelevantArticles(final JSONObject article, final JSONObject preference) {
         try {
             final int displayCnt = preference.getInt(Option.ID_C_RELEVANT_ARTICLES_DISPLAY_CNT);
             final String[] tagTitles = article.getString(Article.ARTICLE_TAGS_REF).split(",");
@@ -859,7 +816,7 @@ public class ArticleQueryService {
         } catch (final Exception e) {
             LOGGER.log(Level.ERROR, "Gets relevant articles failed", e);
 
-            throw new ServiceException(e);
+            return Collections.emptyList();
         }
     }
 
@@ -937,14 +894,14 @@ public class ArticleQueryService {
      *
      * @param articleId the specified article id
      * @return an article, returns {@code null} if not found
-     * @throws ServiceException service exception
      */
-    public JSONObject getArticleById(final String articleId) throws ServiceException {
+    public JSONObject getArticleById(final String articleId) {
         try {
             return articleRepository.get(articleId);
         } catch (final RepositoryException e) {
-            LOGGER.log(Level.ERROR, "Gets an article[articleId=" + articleId + "] failed", e);
-            throw new ServiceException(e);
+            LOGGER.log(Level.ERROR, "Gets an article [id=" + articleId + "] failed", e);
+
+            return null;
         }
     }
 
@@ -987,6 +944,7 @@ public class ArticleQueryService {
                 final JSONObject article = articles.getJSONObject(i);
                 article.put(ARTICLE_CREATE_TIME, article.getLong(ARTICLE_CREATED));
                 article.put(ARTICLE_T_CREATE_DATE, new Date(article.optLong(ARTICLE_CREATED)));
+                article.put(Article.ARTICLE_T_UPDATE_DATE, new Date(article.optLong(ARTICLE_UPDATED)));
 
                 ret.add(article);
             }
@@ -1006,24 +964,23 @@ public class ArticleQueryService {
      * Invoking this method dose not effect on article view count.
      * </p>
      *
-     * @param request   the specified HTTP servlet request
+     * @param context   the specified HTTP servlet request context
      * @param articleId the specified article id
      * @return article contents, returns {@code null} if not found
      * @throws ServiceException service exception
      */
-    public String getArticleContent(final HttpServletRequest request, final String articleId) throws ServiceException {
+    public String getArticleContent(final RequestContext context, final String articleId) throws ServiceException {
         if (StringUtils.isBlank(articleId)) {
             return null;
         }
 
         try {
             final JSONObject article = articleRepository.get(articleId);
-
             if (null == article) {
                 return null;
             }
 
-            if (needViewPwd(request, article)) {
+            if (null != context && Solos.needViewPwd(context.getRequest(), context.getResponse(), article)) {
                 final String content = langPropsService.get("articleContentPwd");
 
                 article.put(ARTICLE_CONTENT, content);

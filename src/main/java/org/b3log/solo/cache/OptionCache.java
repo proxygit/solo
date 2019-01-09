@@ -1,6 +1,6 @@
 /*
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -18,10 +18,9 @@
 package org.b3log.solo.cache;
 
 import org.b3log.latke.Keys;
-import org.b3log.latke.ioc.inject.Named;
-import org.b3log.latke.ioc.inject.Singleton;
+import org.b3log.latke.ioc.Singleton;
 import org.b3log.solo.model.Option;
-import org.b3log.solo.util.JSONs;
+import org.b3log.solo.util.Solos;
 import org.json.JSONObject;
 
 import java.util.Map;
@@ -34,7 +33,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * @version 1.1.0.1, Sep 25, 2018
  * @since 2.3.0
  */
-@Named
 @Singleton
 public class OptionCache {
 
@@ -69,7 +67,7 @@ public class OptionCache {
             return null;
         }
 
-        return JSONs.clone(ret);
+        return Solos.clone(ret);
     }
 
     /**
@@ -94,7 +92,7 @@ public class OptionCache {
             return null;
         }
 
-        return JSONs.clone(option);
+        return Solos.clone(option);
     }
 
     /**
@@ -103,7 +101,7 @@ public class OptionCache {
      * @param option the specified option
      */
     public void putOption(final JSONObject option) {
-        cache.put(option.optString(Keys.OBJECT_ID), JSONs.clone(option));
+        cache.put(option.optString(Keys.OBJECT_ID), Solos.clone(option));
 
         final String category = option.optString(Option.OPTION_CATEGORY);
         removeCategory(category);

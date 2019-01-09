@@ -1,6 +1,6 @@
 /*
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -17,9 +17,6 @@
  */
 package org.b3log.solo.processor;
 
-import com.qiniu.storage.Configuration;
-import com.qiniu.storage.UploadManager;
-import com.qiniu.util.Auth;
 import jodd.io.FileUtil;
 import jodd.io.upload.FileUpload;
 import jodd.io.upload.MultipartStreamParser;
@@ -31,18 +28,19 @@ import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.time.DateFormatUtils;
 import org.b3log.latke.Latkes;
-import org.b3log.latke.ioc.LatkeBeanManager;
-import org.b3log.latke.ioc.Lifecycle;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
-import org.b3log.latke.servlet.HTTPRequestContext;
-import org.b3log.latke.servlet.HTTPRequestMethod;
+import org.b3log.latke.model.Role;
+import org.b3log.latke.model.User;
+import org.b3log.latke.servlet.HttpMethod;
+import org.b3log.latke.servlet.RequestContext;
 import org.b3log.latke.servlet.annotation.RequestProcessing;
 import org.b3log.latke.servlet.annotation.RequestProcessor;
 import org.b3log.latke.util.URLs;
 import org.b3log.solo.SoloServletListener;
-import org.b3log.solo.model.Option;
-import org.b3log.solo.service.OptionQueryService;
+import org.b3log.solo.service.oss.CloudStorageService;
+import org.b3log.solo.service.oss.OssService;
 import org.b3log.solo.util.Solos;
 import org.json.JSONObject;
 
@@ -55,7 +53,8 @@ import java.util.*;
  * File upload processor.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.0.1.2, Aug 2, 2018
+ * @author <a href="https://github.com/hzchendou">hzchendou</a>
+ * @version 1.0.2.3, Dec 23, 2018
  * @since 2.8.0
  */
 @RequestProcessor
@@ -67,12 +66,12 @@ public class FileUploadProcessor {
     private static final Logger LOGGER = Logger.getLogger(FileUploadProcessor.class);
 
     /**
-     * Qiniu enabled.
+     * Cloud OSS (Aliyun/Qiniu) enabled.
      */
-    private static final Boolean QN_ENABLED = StringUtils.isBlank(Solos.UPLOAD_DIR_PATH);
+    private static final Boolean OSS_ENABLED = StringUtils.isBlank(Solos.UPLOAD_DIR_PATH);
 
     static {
-        if (!QN_ENABLED) {
+        if (!OSS_ENABLED) {
             final File file = new File(Solos.UPLOAD_DIR_PATH);
             if (!FileUtil.isExistingFolder(file)) {
                 try {
@@ -88,20 +87,21 @@ public class FileUploadProcessor {
         }
     }
 
+    @Inject
+    private CloudStorageService cloudStorageService;
+
     /**
      * Gets file by the specified URL.
      *
-     * @param req  the specified request
-     * @param resp the specified response
-     * @throws Exception exception
+     * @param context the specified context
      */
-    @RequestProcessing(value = "/upload/*", method = HTTPRequestMethod.GET)
-    public void getFile(final HttpServletRequest req, final HttpServletResponse resp) throws Exception {
-        if (QN_ENABLED) {
+    @RequestProcessing(value = "/upload/{file}", method = HttpMethod.GET)
+    public void getFile(final RequestContext context) {
+        if (OSS_ENABLED) {
             return;
         }
 
-        final String uri = req.getRequestURI();
+        final String uri = context.requestURI();
         String key = StringUtils.substringAfter(uri, "/upload/");
         key = StringUtils.substringBeforeLast(key, "?"); // Erase Qiniu template
         key = StringUtils.substringBeforeLast(key, "?"); // Erase Qiniu template
@@ -110,80 +110,92 @@ public class FileUploadProcessor {
         path = URLs.decode(path);
 
         if (!FileUtil.isExistingFile(new File(path))) {
-            resp.sendError(HttpServletResponse.SC_NOT_FOUND);
+            context.sendError(HttpServletResponse.SC_NOT_FOUND);
 
             return;
         }
 
-        final byte[] data = IOUtils.toByteArray(new FileInputStream(path));
+        byte[] data;
+        try {
+            data = IOUtils.toByteArray(new FileInputStream(path));
+        } catch (final Exception e) {
+            LOGGER.log(Level.ERROR, "Reads input stream failed: " + e.getMessage());
+            context.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
 
+            return;
+        }
+        final HttpServletRequest req = context.getRequest();
         final String ifNoneMatch = req.getHeader("If-None-Match");
         final String etag = "\"" + DigestUtils.md5Hex(new String(data)) + "\"";
 
-        resp.addHeader("Cache-Control", "public, max-age=31536000");
-        resp.addHeader("ETag", etag);
-        resp.setHeader("Server", "Latke Static Server (v" + SoloServletListener.VERSION + ")");
+        context.addHeader("Cache-Control", "public, max-age=31536000");
+        context.addHeader("ETag", etag);
+        context.setHeader("Server", "Latke Static Server (v" + SoloServletListener.VERSION + ")");
         final String ext = StringUtils.substringAfterLast(path, ".");
         final String mimeType = MimeTypes.getMimeType(ext);
-        resp.addHeader("Content-Type", mimeType);
+        context.addHeader("Content-Type", mimeType);
 
         if (etag.equals(ifNoneMatch)) {
-            resp.setStatus(HttpServletResponse.SC_NOT_MODIFIED);
+            context.setStatus(HttpServletResponse.SC_NOT_MODIFIED);
 
             return;
         }
 
-        try (final OutputStream output = resp.getOutputStream()) {
+        final HttpServletResponse response = context.getResponse();
+        try (final OutputStream output = response.getOutputStream()) {
             IOUtils.write(data, output);
             output.flush();
+        } catch (final Exception e) {
+            LOGGER.log(Level.ERROR, "Writes output stream failed: " + e.getMessage());
         }
     }
 
     /**
      * Uploads file.
      *
-     * @param req the specified reuqest
-     * @throws Exception exception
+     * @param context the specified context
      */
-    @RequestProcessing(value = "/upload", method = HTTPRequestMethod.POST)
-    public void uploadFile(final HTTPRequestContext context, final HttpServletRequest req) throws Exception {
+    @RequestProcessing(value = "/upload", method = HttpMethod.POST)
+    public void uploadFile(final RequestContext context) {
         context.renderJSON();
+        final HttpServletRequest request = context.getRequest();
+        if (!Solos.isLoggedIn(context)) {
+            context.sendError(HttpServletResponse.SC_UNAUTHORIZED);
+
+            return;
+        }
+
+        final JSONObject currentUser = Solos.getCurrentUser(context.getRequest(), context.getResponse());
+        if (Role.VISITOR_ROLE.equals(currentUser.optString(User.USER_ROLE))) {
+            context.sendError(HttpServletResponse.SC_FORBIDDEN);
+
+            return;
+        }
 
         final int maxSize = 1024 * 1024 * 100;
         final MultipartStreamParser parser = new MultipartStreamParser(new MemoryFileUploadFactory().setMaxFileSize(maxSize));
-        parser.parseRequestStream(req.getInputStream(), "UTF-8");
-        final List<String> errFiles = new ArrayList();
+        try {
+            parser.parseRequestStream(request.getInputStream(), "UTF-8");
+        } catch (final Exception e) {
+            LOGGER.log(Level.ERROR, "Parses request stream failed: " + e.getMessage());
+            context.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+
+            return;
+        }
+        final List<String> errFiles = new ArrayList<>();
         final Map<String, String> succMap = new LinkedHashMap<>();
         final FileUpload[] files = parser.getFiles("file[]");
         final String[] names = parser.getParameterValues("name[]");
         String fileName;
 
-        Auth auth;
-        UploadManager uploadManager = null;
-        String uploadToken = null;
-        JSONObject qiniu = null;
+        OssService ossService = null;
         final String date = DateFormatUtils.format(System.currentTimeMillis(), "yyyy/MM");
-        if (QN_ENABLED) {
+        if (OSS_ENABLED) {
             try {
-                final LatkeBeanManager beanManager = Lifecycle.getBeanManager();
-                final OptionQueryService optionQueryService = beanManager.getReference(OptionQueryService.class);
-                qiniu = optionQueryService.getOptions(Option.CATEGORY_C_QINIU);
-                if (null == qiniu) {
-                    final String msg = "Qiniu settings failed, please visit https://hacpai.com/article/1442418791213 for more details";
-                    LOGGER.log(Level.ERROR, msg);
-                    context.renderMsg(msg);
-
-                    return;
-                }
-
-                auth = Auth.create(qiniu.optString(Option.ID_C_QINIU_ACCESS_KEY), qiniu.optString(Option.ID_C_QINIU_SECRET_KEY));
-                uploadToken = auth.uploadToken(qiniu.optString(Option.ID_C_QINIU_BUCKET), null, 3600 * 6, null);
-                uploadManager = new UploadManager(new Configuration());
+                ossService = cloudStorageService.createStorage();
             } catch (final Exception e) {
-                final String msg = "Qiniu settings failed, please visit https://hacpai.com/article/1442418791213 for more details";
-                LOGGER.log(Level.ERROR, msg);
-                context.renderMsg(msg);
-
+                LOGGER.log(Level.ERROR, e.getMessage());
+                context.renderMsg(e.getMessage());
                 return;
             }
         }
@@ -209,13 +221,13 @@ public class FileUploadProcessor {
                 final String uuid = UUID.randomUUID().toString().replaceAll("-", "");
                 fileName = uuid + '_' + processName + "." + suffix;
 
-                if (QN_ENABLED) {
+                if (OSS_ENABLED) {
                     fileName = "file/" + date + "/" + fileName;
                     if (!ArrayUtils.isEmpty(names)) {
                         fileName = names[i];
                     }
-                    uploadManager.put(file.getFileInputStream(), fileName, uploadToken, null, contentType);
-                    succMap.put(originalName, qiniu.optString(Option.ID_C_QINIU_DOMAIN) + "/" + fileName);
+                    String fileLink = ossService.upload(file, fileName);
+                    succMap.put(originalName, fileLink);
                 } else {
                     try (final OutputStream output = new FileOutputStream(Solos.UPLOAD_DIR_PATH + fileName);
                          final InputStream input = file.getFileInputStream()) {
@@ -224,7 +236,7 @@ public class FileUploadProcessor {
                     succMap.put(originalName, Latkes.getServePath() + "/upload/" + fileName);
                 }
             } catch (final Exception e) {
-                LOGGER.log(Level.WARN, "Uploads file failed", e);
+                LOGGER.log(Level.WARN, "Uploads file failed: " + e.getMessage());
 
                 errFiles.add(originalName);
             }

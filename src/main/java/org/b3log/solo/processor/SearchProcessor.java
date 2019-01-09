@@ -1,6 +1,6 @@
 /*
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -20,29 +20,29 @@ package org.b3log.solo.processor;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.StringUtils;
 import org.b3log.latke.Latkes;
-import org.b3log.latke.ioc.inject.Inject;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.model.Pagination;
 import org.b3log.latke.service.LangPropsService;
-import org.b3log.latke.servlet.HTTPRequestContext;
-import org.b3log.latke.servlet.HTTPRequestMethod;
+import org.b3log.latke.servlet.HttpMethod;
+import org.b3log.latke.servlet.RequestContext;
 import org.b3log.latke.servlet.annotation.RequestProcessing;
 import org.b3log.latke.servlet.annotation.RequestProcessor;
-import org.b3log.latke.servlet.renderer.TextXMLRenderer;
-import org.b3log.latke.servlet.renderer.freemarker.AbstractFreeMarkerRenderer;
-import org.b3log.latke.util.Strings;
+import org.b3log.latke.servlet.renderer.AbstractFreeMarkerRenderer;
+import org.b3log.latke.servlet.renderer.TextXmlRenderer;
+import org.b3log.latke.util.Paginator;
 import org.b3log.solo.model.Article;
 import org.b3log.solo.model.Common;
 import org.b3log.solo.model.Option;
-import org.b3log.solo.processor.renderer.ConsoleRenderer;
-import org.b3log.solo.processor.util.Filler;
 import org.b3log.solo.service.ArticleQueryService;
+import org.b3log.solo.service.DataModelService;
 import org.b3log.solo.service.PreferenceQueryService;
 import org.b3log.solo.service.UserQueryService;
 import org.json.JSONObject;
 import org.jsoup.Jsoup;
 import org.jsoup.safety.Whitelist;
+import org.owasp.encoder.Encode;
 
 import javax.servlet.http.HttpServletRequest;
 import java.io.InputStream;
@@ -55,7 +55,7 @@ import java.util.Map;
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
  * @author <a href="http://vanessa.b3log.org">Liyuan Li</a>
- * @version 1.1.0.1, Sep 20, 2018
+ * @version 1.1.1.2, Jan 5, 2019
  * @since 2.4.0
  */
 @RequestProcessor
@@ -91,19 +91,19 @@ public class SearchProcessor {
     private LangPropsService langPropsService;
 
     /**
-     * Filler.
+     * DataModelService.
      */
     @Inject
-    private Filler filler;
+    private DataModelService dataModelService;
 
     /**
      * Shows opensearch.xml.
      *
      * @param context the specified context
      */
-    @RequestProcessing(value = "/opensearch.xml", method = HTTPRequestMethod.GET)
-    public void showOpensearchXML(final HTTPRequestContext context) {
-        final TextXMLRenderer renderer = new TextXMLRenderer();
+    @RequestProcessing(value = "/opensearch.xml", method = HttpMethod.GET)
+    public void showOpensearchXML(final RequestContext context) {
+        final TextXmlRenderer renderer = new TextXmlRenderer();
         context.setRenderer(renderer);
 
         try {
@@ -125,28 +125,20 @@ public class SearchProcessor {
      *
      * @param context the specified context
      */
-    @RequestProcessing(value = "/search", method = HTTPRequestMethod.GET)
-    public void search(final HTTPRequestContext context) {
-        final AbstractFreeMarkerRenderer renderer = new ConsoleRenderer();
-        context.setRenderer(renderer);
-        renderer.setTemplateName("search.ftl");
-
+    @RequestProcessing(value = "/search", method = HttpMethod.GET)
+    public void search(final RequestContext context) {
+        final HttpServletRequest request = context.getRequest();
+        final AbstractFreeMarkerRenderer renderer = new SkinRenderer(context, "search.ftl");
         final Map<String, String> langs = langPropsService.getAll(Latkes.getLocale());
         final Map<String, Object> dataModel = renderer.getDataModel();
         dataModel.putAll(langs);
 
-        final HttpServletRequest request = context.getRequest();
-
-        String page = request.getParameter("p");
-        if (!Strings.isNumeric(page)) {
-            page = "1";
-        }
-        final int pageNum = Integer.valueOf(page);
-        String keyword = request.getParameter(Common.KEYWORD);
+        final int pageNum = Paginator.getPage(request);
+        String keyword = context.param(Common.KEYWORD);
         if (StringUtils.isBlank(keyword)) {
             keyword = "";
         }
-        keyword = Jsoup.clean(keyword, Whitelist.none());
+        keyword = Encode.forHtml(keyword);
 
         dataModel.put(Common.KEYWORD, keyword);
         final JSONObject result = articleQueryService.searchKeyword(keyword, pageNum, 15);
@@ -155,8 +147,8 @@ public class SearchProcessor {
         try {
             final JSONObject preference = preferenceQueryService.getPreference();
 
-            filler.fillCommon(request, context.getResponse(), dataModel, preference);
-            filler.setArticlesExProperties(request, articles, preference);
+            dataModelService.fillCommon(context, dataModel, preference);
+            dataModelService.setArticlesExProperties(context, articles, preference);
 
             dataModel.put(Article.ARTICLES, articles);
             final JSONObject pagination = result.optJSONObject(Pagination.PAGINATION);

@@ -1,6 +1,6 @@
 /*
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -20,28 +20,27 @@ package org.b3log.solo.processor;
 import org.apache.commons.lang.StringUtils;
 import org.b3log.latke.Keys;
 import org.b3log.latke.Latkes;
-import org.b3log.latke.ioc.inject.Inject;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
-import org.b3log.latke.model.Role;
 import org.b3log.latke.model.User;
 import org.b3log.latke.service.LangPropsService;
-import org.b3log.latke.servlet.HTTPRequestContext;
-import org.b3log.latke.servlet.HTTPRequestMethod;
+import org.b3log.latke.servlet.HttpMethod;
+import org.b3log.latke.servlet.RequestContext;
 import org.b3log.latke.servlet.annotation.RequestProcessing;
 import org.b3log.latke.servlet.annotation.RequestProcessor;
-import org.b3log.latke.servlet.renderer.JSONRenderer;
-import org.b3log.latke.servlet.renderer.freemarker.AbstractFreeMarkerRenderer;
+import org.b3log.latke.servlet.renderer.AbstractFreeMarkerRenderer;
+import org.b3log.latke.servlet.renderer.JsonRenderer;
 import org.b3log.latke.util.Locales;
-import org.b3log.latke.util.Sessions;
 import org.b3log.latke.util.Strings;
 import org.b3log.solo.SoloServletListener;
 import org.b3log.solo.model.Common;
 import org.b3log.solo.model.UserExt;
-import org.b3log.solo.processor.renderer.ConsoleRenderer;
-import org.b3log.solo.processor.util.Filler;
+import org.b3log.solo.processor.console.ConsoleRenderer;
+import org.b3log.solo.service.DataModelService;
 import org.b3log.solo.service.InitService;
-import org.b3log.solo.util.Thumbnails;
+import org.b3log.solo.service.UserQueryService;
+import org.b3log.solo.util.Solos;
 import org.json.JSONObject;
 
 import javax.servlet.http.HttpServletRequest;
@@ -54,7 +53,7 @@ import java.util.Map;
  * Solo initialization service.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.2.0.14, Sep 21, 2018
+ * @version 1.2.0.16, Dec 3, 2018
  * @since 0.4.0
  */
 @RequestProcessor
@@ -72,10 +71,10 @@ public class InitProcessor {
     private InitService initService;
 
     /**
-     * Filler.
+     * DataModelService.
      */
     @Inject
-    private Filler filler;
+    private DataModelService dataModelService;
 
     /**
      * Language service.
@@ -84,22 +83,25 @@ public class InitProcessor {
     private LangPropsService langPropsService;
 
     /**
+     * User query service.
+     */
+    @Inject
+    private UserQueryService userQueryService;
+
+    /**
      * Shows initialization page.
      *
-     * @param context  the specified http request context
-     * @param request  the specified http servlet request
-     * @param response the specified http servlet response
-     * @throws Exception exception
+     * @param context the specified http request context
      */
-    @RequestProcessing(value = "/init", method = HTTPRequestMethod.GET)
-    public void showInit(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response)
-            throws Exception {
+    @RequestProcessing(value = "/init", method = HttpMethod.GET)
+    public void showInit(final RequestContext context) {
         if (initService.isInited()) {
-            response.sendRedirect("/");
+            context.sendRedirect("/");
 
             return;
         }
 
+        final HttpServletRequest request = context.getRequest();
         final AbstractFreeMarkerRenderer renderer = new ConsoleRenderer();
         renderer.setTemplateName("init.ftl");
         context.setRenderer(renderer);
@@ -110,39 +112,41 @@ public class InitProcessor {
         dataModel.put(Common.STATIC_RESOURCE_VERSION, Latkes.getStaticResourceVersion());
         dataModel.put(Common.YEAR, String.valueOf(Calendar.getInstance().get(Calendar.YEAR)));
         Keys.fillRuntime(dataModel);
-        filler.fillMinified(dataModel);
+        dataModelService.fillMinified(dataModel);
     }
 
     /**
      * Initializes Solo.
      *
-     * @param context           the specified http request context
-     * @param request           the specified http servlet request
-     * @param response          the specified http servlet response
-     * @param requestJSONObject the specified request json object, for example,
-     *                          {
-     *                          "userName": "",
-     *                          "userEmail": "",
-     *                          "userPassword": "",
-     *                          "userAvatar": "" // optional
-     *                          }
-     * @throws Exception exception
+     * <p>
+     * Request json:
+     * <pre>
+     * {
+     *     "userName": "",
+     *     "userEmail": "",
+     *     "userPassword": "",
+     *     "userAvatar": "" // optional
+     * }
+     * </pre>
+     * </p>
+     *
+     * @param context the specified http request context
      */
-    @RequestProcessing(value = "/init", method = HTTPRequestMethod.POST)
-    public void initSolo(final HTTPRequestContext context, final HttpServletRequest request,
-                         final HttpServletResponse response, final JSONObject requestJSONObject) throws Exception {
+    @RequestProcessing(value = "/init", method = HttpMethod.POST)
+    public void initSolo(final RequestContext context) {
         if (initService.isInited()) {
-            response.sendRedirect("/");
+            context.sendRedirect("/");
 
             return;
         }
 
-        final JSONRenderer renderer = new JSONRenderer();
+        final JsonRenderer renderer = new JsonRenderer();
         context.setRenderer(renderer);
         final JSONObject ret = new JSONObject().put(Keys.STATUS_CODE, false);
         renderer.setJSONObject(ret);
 
         try {
+            final JSONObject requestJSONObject = context.requestJSON();
             final String userName = requestJSONObject.optString(User.USER_NAME);
             final String userEmail = requestJSONObject.optString(User.USER_EMAIL);
             final String userPassword = requestJSONObject.optString(User.USER_PASSWORD);
@@ -159,24 +163,15 @@ public class InitProcessor {
                 return;
             }
 
+            final HttpServletRequest request = context.getRequest();
             final Locale locale = Locales.getLocale(request);
             requestJSONObject.put(Keys.LOCALE, locale.toString());
 
             initService.init(requestJSONObject);
 
-            // If initialized, login the admin
-            final JSONObject admin = new JSONObject();
-            admin.put(User.USER_NAME, userName);
-            admin.put(User.USER_EMAIL, userEmail);
-            admin.put(User.USER_ROLE, Role.ADMIN_ROLE);
-            admin.put(User.USER_PASSWORD, userPassword);
-            String avatar = requestJSONObject.optString(UserExt.USER_AVATAR);
-            if (StringUtils.isBlank(avatar)) {
-                avatar = Thumbnails.getGravatarURL(userEmail, "128");
-            }
-            admin.put(UserExt.USER_AVATAR, avatar);
-
-            Sessions.login(request, response, admin);
+            final JSONObject admin = userQueryService.getAdmin();
+            final HttpServletResponse response = context.getResponse();
+            Solos.login(admin, response);
 
             ret.put(Keys.STATUS_CODE, true);
         } catch (final Exception e) {

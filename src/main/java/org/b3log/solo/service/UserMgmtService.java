@@ -1,6 +1,6 @@
 /*
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -21,9 +21,7 @@ import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.lang.StringUtils;
 import org.b3log.latke.Keys;
 import org.b3log.latke.Latkes;
-import org.b3log.latke.ioc.LatkeBeanManager;
-import org.b3log.latke.ioc.Lifecycle;
-import org.b3log.latke.ioc.inject.Inject;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.model.Role;
@@ -34,19 +32,14 @@ import org.b3log.latke.service.LangPropsService;
 import org.b3log.latke.service.ServiceException;
 import org.b3log.latke.service.annotation.Service;
 import org.b3log.latke.util.CollectionUtils;
-import org.b3log.latke.util.Crypts;
-import org.b3log.latke.util.Sessions;
 import org.b3log.latke.util.Strings;
 import org.b3log.solo.model.Option;
 import org.b3log.solo.model.UserExt;
 import org.b3log.solo.repository.UserRepository;
-import org.b3log.solo.util.Thumbnails;
+import org.b3log.solo.util.Solos;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import javax.servlet.http.Cookie;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import java.util.Set;
 
 /**
@@ -55,7 +48,7 @@ import java.util.Set;
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
  * @author <a href="mailto:385321165@qq.com">DASHU</a>
  * @author <a href="https://github.com/nanolikeyou">nanolikeyou</a>
- * @version 1.1.0.13, Sep 21, 2018
+ * @version 1.1.0.15, Oct 19, 2018
  * @since 0.4.0
  */
 @Service
@@ -94,67 +87,6 @@ public class UserMgmtService {
      */
     @Inject
     private OptionMgmtService optionMgmtService;
-
-    /**
-     * Tries to login with cookie.
-     *
-     * @param request  the specified request
-     * @param response the specified response
-     */
-    public void tryLogInWithCookie(final HttpServletRequest request, final HttpServletResponse response) {
-        final Cookie[] cookies = request.getCookies();
-        if (null == cookies || 0 == cookies.length) {
-            return;
-        }
-
-        try {
-            for (int i = 0; i < cookies.length; i++) {
-                final Cookie cookie = cookies[i];
-                if (!Sessions.COOKIE_NAME.equals(cookie.getName())) {
-                    continue;
-                }
-
-                final String value = Crypts.decryptByAES(cookie.getValue(), Sessions.COOKIE_SECRET);
-                final JSONObject cookieJSONObject = new JSONObject(value);
-
-                final String userId = cookieJSONObject.optString(Keys.OBJECT_ID);
-                if (StringUtils.isBlank(userId)) {
-                    break;
-                }
-
-                final LatkeBeanManager beanManager = Lifecycle.getBeanManager();
-                final UserQueryService userQueryService = beanManager.getReference(UserQueryService.class);
-
-                final JSONObject userResult = userQueryService.getUser(userId);
-                if (null == userResult) {
-                    break;
-                }
-
-                final JSONObject user = userResult.getJSONObject(User.USER);
-                if (null == user) {
-                    break;
-                }
-
-                final String userPassword = user.optString(User.USER_PASSWORD);
-                final String token = cookieJSONObject.optString(Keys.TOKEN);
-                final String hashPassword = StringUtils.substringBeforeLast(token, ":");
-
-                if (userPassword.equals(hashPassword)) {
-                    Sessions.login(request, response, user);
-
-                    LOGGER.log(Level.DEBUG, "Logged in with cookie [email={0}]", user.optString(User.USER_EMAIL));
-                }
-            }
-        } catch (final Exception e) {
-            LOGGER.log(Level.TRACE, "Parses cookie failed, clears the cookie [name=" + Sessions.COOKIE_NAME + "]");
-
-            final Cookie cookie = new Cookie(Sessions.COOKIE_NAME, null);
-            cookie.setMaxAge(0);
-            cookie.setPath("/");
-
-            response.addCookie(cookie);
-        }
-    }
 
     /**
      * Updates a user by the specified request json object.
@@ -201,11 +133,8 @@ public class UserMgmtService {
             final boolean maybeHashed = HASHED_PASSWORD_LENGTH == userPassword.length();
             final String newHashedPassword = DigestUtils.md5Hex(userPassword);
             final String oldHashedPassword = oldUser.optString(User.USER_PASSWORD);
-
-            if (!"demo.b3log.org".equals(Latkes.getServerHost())) { // Skips the Solo Online Demo (http://demo.b3log.org)
-                if (!maybeHashed || (!oldHashedPassword.equals(userPassword) && !oldHashedPassword.equals(newHashedPassword))) {
-                    oldUser.put(User.USER_PASSWORD, newHashedPassword);
-                }
+            if (!maybeHashed || (!oldHashedPassword.equals(userPassword) && !oldHashedPassword.equals(newHashedPassword))) {
+                oldUser.put(User.USER_PASSWORD, newHashedPassword);
             }
 
             final String userRole = requestJSONObject.optString(User.USER_ROLE);
@@ -344,7 +273,7 @@ public class UserMgmtService {
 
             String userAvatar = requestJSONObject.optString(UserExt.USER_AVATAR);
             if (StringUtils.isBlank(userAvatar)) {
-                userAvatar = Thumbnails.getGravatarURL(userEmail, "128");
+                userAvatar = Solos.getGravatarURL(userEmail, "128");
             }
             user.put(UserExt.USER_AVATAR, userAvatar);
 

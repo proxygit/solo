@@ -1,6 +1,6 @@
 /*
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -20,21 +20,20 @@ package org.b3log.solo.service;
 import org.apache.commons.lang.StringUtils;
 import org.b3log.latke.Keys;
 import org.b3log.latke.Latkes;
-import org.b3log.latke.ioc.inject.Inject;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
-import org.b3log.latke.mail.MailService;
-import org.b3log.latke.mail.MailServiceFactory;
 import org.b3log.latke.model.User;
 import org.b3log.latke.repository.Query;
 import org.b3log.latke.repository.Transaction;
-import org.b3log.latke.repository.jdbc.JdbcRepository;
 import org.b3log.latke.repository.jdbc.util.Connections;
 import org.b3log.latke.service.LangPropsService;
 import org.b3log.latke.service.annotation.Service;
 import org.b3log.solo.SoloServletListener;
 import org.b3log.solo.cache.ArticleCache;
 import org.b3log.solo.cache.CommentCache;
+import org.b3log.solo.mail.MailService;
+import org.b3log.solo.mail.MailServiceFactory;
 import org.b3log.solo.model.Article;
 import org.b3log.solo.model.Comment;
 import org.b3log.solo.model.Option;
@@ -43,8 +42,7 @@ import org.b3log.solo.repository.ArticleRepository;
 import org.b3log.solo.repository.CommentRepository;
 import org.b3log.solo.repository.OptionRepository;
 import org.b3log.solo.repository.UserRepository;
-import org.b3log.solo.util.Mails;
-import org.b3log.solo.util.Thumbnails;
+import org.b3log.solo.util.Solos;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -58,7 +56,7 @@ import java.util.List;
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
  * @author <a href="mailto:dongxu.wang@acm.org">Dongxu Wang</a>
- * @version 1.2.0.29, Sep 16, 2018
+ * @version 1.2.0.32, Dec 11, 2018
  * @since 1.2.0
  */
 @Service
@@ -82,7 +80,7 @@ public class UpgradeService {
     /**
      * Old version.
      */
-    private static final String FROM_VER = "2.9.3";
+    private static final String FROM_VER = "2.9.6";
 
     /**
      * New version.
@@ -188,30 +186,25 @@ public class UpgradeService {
         LOGGER.log(Level.INFO, "Upgrading from version [{0}] to version [{1}]....", FROM_VER, TO_VER);
 
         try {
-            alterTables();
-            JdbcRepository.dispose(); // avoid to metadata lock
-            upgradeArticles();
-            upgradeComments();
-            JdbcRepository.dispose(); // avoid to metadata lock
-            dropColumns();
-            JdbcRepository.dispose(); // avoid to metadata lock
-
-            articleCache.clear();
-            commentCache.clear();
-
             final Transaction transaction = optionRepository.beginTransaction();
             final JSONObject versionOpt = optionRepository.get(Option.ID_C_VERSION);
             versionOpt.put(Option.OPTION_VALUE, TO_VER);
             optionRepository.update(Option.ID_C_VERSION, versionOpt);
 
+            final JSONObject customVarsOpt = new JSONObject();
+            customVarsOpt.put(Keys.OBJECT_ID, Option.ID_C_CUSTOM_VARS);
+            customVarsOpt.put(Option.OPTION_CATEGORY, Option.CATEGORY_C_PREFERENCE);
+            customVarsOpt.put(Option.OPTION_VALUE, Option.DefaultPreference.DEFAULT_CUSTOM_VARS);
+            optionRepository.add(customVarsOpt);
+
             transaction.commit();
+
+            LOGGER.log(Level.INFO, "Upgraded from version [{0}] to version [{1}] successfully :-)", FROM_VER, TO_VER);
         } catch (final Exception e) {
             LOGGER.log(Level.ERROR, "Upgrade failed!", e);
 
             throw new Exception("Upgrade failed from version [" + FROM_VER + "] to version [" + TO_VER + ']');
         }
-
-        LOGGER.log(Level.INFO, "Upgraded from version [{0}] to version [{1}] successfully :-)", FROM_VER, TO_VER);
     }
 
     private void alterTables() throws Exception {
@@ -263,7 +256,7 @@ public class UpgradeService {
         for (int i = 0; i < users.length(); i++) {
             final JSONObject user = users.getJSONObject(i);
             final String email = user.optString(User.USER_EMAIL);
-            user.put(UserExt.USER_AVATAR, Thumbnails.getGravatarURL(email, "128"));
+            user.put(UserExt.USER_AVATAR, Solos.getGravatarURL(email, "128"));
 
             userRepository.update(user.optString(Keys.OBJECT_ID), user);
             LOGGER.log(Level.INFO, "Updated user[email={0}]", email);
@@ -387,7 +380,7 @@ public class UpgradeService {
      * @throws Exception exception
      */
     private void notifyUserByEmail() throws Exception {
-        if (!Mails.isConfigured()) {
+        if (!Solos.isMailConfigured()) {
             return;
         }
 

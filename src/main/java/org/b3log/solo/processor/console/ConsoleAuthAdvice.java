@@ -1,6 +1,6 @@
 /*
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -18,64 +18,48 @@
 package org.b3log.solo.processor.console;
 
 import org.b3log.latke.Keys;
-import org.b3log.latke.ioc.inject.Inject;
-import org.b3log.latke.ioc.inject.Named;
-import org.b3log.latke.ioc.inject.Singleton;
-import org.b3log.latke.logging.Logger;
+import org.b3log.latke.ioc.Singleton;
 import org.b3log.latke.model.Role;
 import org.b3log.latke.model.User;
-import org.b3log.latke.servlet.HTTPRequestContext;
-import org.b3log.latke.servlet.advice.BeforeRequestProcessAdvice;
+import org.b3log.latke.servlet.RequestContext;
+import org.b3log.latke.servlet.advice.ProcessAdvice;
 import org.b3log.latke.servlet.advice.RequestProcessAdviceException;
-import org.b3log.solo.service.UserQueryService;
+import org.b3log.solo.util.Solos;
 import org.json.JSONObject;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.util.Map;
 
 /**
  * The common auth check before advice for admin console.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.0.1.1, Sep 25, 2018
+ * @version 1.0.1.2, Oct 5, 2018
  * @since 2.9.5
  */
-@Named
 @Singleton
-public class ConsoleAuthAdvice extends BeforeRequestProcessAdvice {
-
-    /**
-     * Logger.
-     */
-    private static final Logger LOGGER = Logger.getLogger(ConsoleAuthAdvice.class);
-
-    /**
-     * User query service.
-     */
-    @Inject
-    private UserQueryService userQueryService;
+public class ConsoleAuthAdvice extends ProcessAdvice {
 
     @Override
-    public void doAdvice(final HTTPRequestContext context, final Map<String, Object> args) throws RequestProcessAdviceException {
+    public void doAdvice(final RequestContext context) throws RequestProcessAdviceException {
         final HttpServletRequest request = context.getRequest();
-        if (!userQueryService.isLoggedIn(request, context.getResponse())) {
+        if (!Solos.isLoggedIn(context)) {
             final JSONObject exception401 = new JSONObject();
-            exception401.put(Keys.MSG, "Unauthorized to request [" + request.getRequestURI() + "]");
+            exception401.put(Keys.MSG, "Unauthorized to request [" + context.requestURI() + "]");
             exception401.put(Keys.STATUS_CODE, HttpServletResponse.SC_UNAUTHORIZED);
 
             throw new RequestProcessAdviceException(exception401);
         }
 
-        final JSONObject currentUser = userQueryService.getCurrentUser(request);
+
+        final JSONObject currentUser = Solos.getCurrentUser(context.getRequest(), context.getResponse());
         final String userRole = currentUser.optString(User.USER_ROLE);
         if (Role.VISITOR_ROLE.equals(userRole)) {
             final JSONObject exception403 = new JSONObject();
-            exception403.put(Keys.MSG, "Forbidden to request [" + request.getRequestURI() + "]");
+            exception403.put(Keys.MSG, "Forbidden to request [" + context.requestURI() + "]");
             exception403.put(Keys.STATUS_CODE, HttpServletResponse.SC_FORBIDDEN);
 
             throw new RequestProcessAdviceException(exception403);
         }
-
     }
 }

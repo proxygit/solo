@@ -1,7 +1,7 @@
 <#--
 
     Solo - A small and beautiful blogging system written in Java.
-    Copyright (c) 2010-2018, b3log.org & hacpai.com
+    Copyright (c) 2010-2019, b3log.org & hacpai.com
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -41,7 +41,7 @@
             ${aboutContentLabel}
             <ul class="about-list">
                 <li><a target="_blank" href="https://hacpai.com/article/1492881378588">用户指南</a></li>
-                <li><a target="_blank" href="https://hacpai.com/article/1493822943172">开发指南</a></li>
+                <li><a target="_blank" href="https://hacpai.com/article/1537690756242">Solo 从设计到实现</a></li>
                 <li><a target="_blank" href="https://hacpai.com/article/1493814851007">皮肤开发指南</a></li>
             </ul>
             <button class="right" onclick="window.open('https://b3log.org/donate.html')">${sponsorLabel}</button>

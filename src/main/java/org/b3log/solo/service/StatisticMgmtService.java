@@ -1,6 +1,6 @@
 /*
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -17,7 +17,7 @@
  */
 package org.b3log.solo.service;
 
-import org.b3log.latke.ioc.inject.Inject;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.repository.RepositoryException;
@@ -25,11 +25,13 @@ import org.b3log.latke.repository.Transaction;
 import org.b3log.latke.service.LangPropsService;
 import org.b3log.latke.service.ServiceException;
 import org.b3log.latke.service.annotation.Service;
+import org.b3log.latke.servlet.RequestContext;
 import org.b3log.latke.util.Requests;
 import org.b3log.solo.cache.StatisticCache;
 import org.b3log.solo.model.Option;
 import org.b3log.solo.repository.ArticleRepository;
 import org.b3log.solo.repository.OptionRepository;
+import org.b3log.solo.util.Solos;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -46,7 +48,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Statistic management service.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 2.0.1.1, Apr 1, 2018
+ * @version 2.0.1.2, Oct 15, 2018
  * @since 0.5.0
  */
 @Service
@@ -132,11 +134,12 @@ public class StatisticMgmtService {
      * Sees this issue (https://github.com/b3log/solo/issues/44) for more details.
      * </p>
      *
-     * @param request  the specified request
+     * @param context  the specified request context
      * @param response the specified response
      * @return {@code true} if the specified request has been served, returns {@code false} otherwise
      */
-    public static boolean hasBeenServed(final HttpServletRequest request, final HttpServletResponse response) {
+    public static boolean hasBeenServed(final RequestContext context, final HttpServletResponse response) {
+        final HttpServletRequest request = context.getRequest();
         final Cookie[] cookies = request.getCookies();
         if (null == cookies || 0 == cookies.length) {
             return false;
@@ -209,17 +212,16 @@ public class StatisticMgmtService {
      * There is a cron job (/console/stat/viewcnt) to flush the blog view count from cache to datastore.
      * </p>
      *
-     * @param request  the specified request
+     * @param context  the specified request context
      * @param response the specified response
      * @throws ServiceException service exception
-     * @see Requests#searchEngineBotRequest(javax.servlet.http.HttpServletRequest)
      */
-    public void incBlogViewCount(final HttpServletRequest request, final HttpServletResponse response) throws ServiceException {
-        if (Requests.searchEngineBotRequest(request)) {
+    public void incBlogViewCount(final RequestContext context, final HttpServletResponse response) throws ServiceException {
+        if (Solos.isBot(context.getRequest())) {
             return;
         }
 
-        if (hasBeenServed(request, response)) {
+        if (hasBeenServed(context, response)) {
             return;
         }
 
@@ -407,14 +409,12 @@ public class StatisticMgmtService {
      * @param request the specified request
      */
     public void onlineVisitorCount(final HttpServletRequest request) {
-        if (Requests.searchEngineBotRequest(request)) {
+        if (Solos.isBot(request)) {
             return;
         }
 
         final String remoteAddr = Requests.getRemoteAddr(request);
-
         LOGGER.log(Level.DEBUG, "Current request [IP={0}]", remoteAddr);
-
         ONLINE_VISITORS.put(remoteAddr, System.currentTimeMillis());
         LOGGER.log(Level.DEBUG, "Current online visitor count [{0}]", ONLINE_VISITORS.size());
     }

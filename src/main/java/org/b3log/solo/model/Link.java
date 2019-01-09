@@ -1,6 +1,6 @@
 /*
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -22,7 +22,7 @@ package org.b3log.solo.model;
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
  * @version 1.0.0.2, Oct 31, 2011
- * @since  0.3.1
+ * @since 0.3.1
  */
 public final class Link {
 
@@ -59,5 +59,6 @@ public final class Link {
     /**
      * Private constructor.
      */
-    private Link() {}
+    private Link() {
+    }
 }

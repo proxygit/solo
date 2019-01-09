@@ -1,6 +1,6 @@
 /*
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -25,11 +25,10 @@ import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.StringUtils;
 import org.b3log.latke.Latkes;
-import org.b3log.latke.ioc.LatkeBeanManagerImpl;
+import org.b3log.latke.ioc.BeanManager;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.service.LangPropsService;
-import org.b3log.latke.service.LangPropsServiceImpl;
 import org.b3log.latke.util.Callstacks;
 import org.b3log.latke.util.Stopwatchs;
 import org.json.JSONObject;
@@ -47,12 +46,12 @@ import java.util.concurrent.*;
 /**
  * <a href="http://en.wikipedia.org/wiki/Markdown">Markdown</a> utilities.
  * <p>
- * Uses the <a href="https://github.com/chjj/marked">marked</a> as the processor, if not found this command, try
+ * Uses the <a href="https://github.com/markedjs/marked">marked</a> as the processor, if not found this command, try
  * built-in <a href="https://github.com/vsch/flexmark-java">flexmark</a> instead.
  * </p>
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 2.3.1.1, Sep 25, 2018
+ * @version 2.3.1.4, Jan 2, 2019
  * @since 0.4.5
  */
 public final class Markdowns {
@@ -63,11 +62,6 @@ public final class Markdowns {
     private static final Logger LOGGER = Logger.getLogger(Markdowns.class);
 
     /**
-     * Language service.
-     */
-    private static final LangPropsService LANG_PROPS_SERVICE = LatkeBeanManagerImpl.getInstance().getReference(LangPropsServiceImpl.class);
-
-    /**
      * Markdown cache.
      */
     private static final Map<String, JSONObject> MD_CACHE = new ConcurrentHashMap<>();
@@ -75,7 +69,7 @@ public final class Markdowns {
     /**
      * Markdown to HTML timeout.
      */
-    private static final int MD_TIMEOUT = 2000;
+    private static final int MD_TIMEOUT = 10000;
 
     /**
      * Built-in MD engine options.
@@ -113,7 +107,7 @@ public final class Markdowns {
             conn.setDoOutput(true);
 
             try (final OutputStream outputStream = conn.getOutputStream()) {
-                IOUtils.write("Solo 大法好", outputStream, "UTF-8");
+                IOUtils.write("昔日舞曲", outputStream, "UTF-8");
             }
 
             String html;
@@ -123,7 +117,7 @@ public final class Markdowns {
 
             conn.disconnect();
 
-            MARKED_AVAILABLE = StringUtils.contains(html, "<p>Solo 大法好</p>");
+            MARKED_AVAILABLE = StringUtils.contains(html, "<p>昔日舞曲</p>");
 
             if (MARKED_AVAILABLE) {
                 LOGGER.log(Level.DEBUG, "[marked] is available, uses it for markdown processing");
@@ -159,21 +153,33 @@ public final class Markdowns {
             return cachedHTML;
         }
 
+        final LangPropsService langPropsService = BeanManager.getInstance().getReference(LangPropsService.class);
+
         final ExecutorService pool = Executors.newSingleThreadExecutor();
         final long[] threadId = new long[1];
 
         final Callable<String> call = () -> {
             threadId[0] = Thread.currentThread().getId();
 
-            String html = LANG_PROPS_SERVICE.get("contentRenderFailedLabel");
+            String html = langPropsService.get("contentRenderFailedLabel");
 
             if (MARKED_AVAILABLE) {
-                html = toHtmlByMarked(markdownText);
-                if (!StringUtils.startsWith(html, "<p>")) {
-                    html = "<p>" + html + "</p>";
+                try {
+                    html = toHtmlByMarked(markdownText);
+                    if (!StringUtils.startsWith(html, "<p>")) {
+                        html = "<p>" + html + "</p>";
+                    }
+                } catch (final Exception e) {
+                    LOGGER.log(Level.WARN, "Failed to use [marked] for markdown [md=" + StringUtils.substring(markdownText, 0, 256) + "]: " + e.getMessage());
+
+                    com.vladsch.flexmark.util.ast.Node document = PARSER.parse(markdownText);
+                    html = RENDERER.render(document);
+                    if (!StringUtils.startsWith(html, "<p>")) {
+                        html = "<p>" + html + "</p>";
+                    }
                 }
             } else {
-                com.vladsch.flexmark.ast.Node document = PARSER.parse(markdownText);
+                com.vladsch.flexmark.util.ast.Node document = PARSER.parse(markdownText);
                 html = RENDERER.render(document);
                 if (!StringUtils.startsWith(html, "<p>")) {
                     html = "<p>" + html + "</p>";
@@ -223,7 +229,7 @@ public final class Markdowns {
             Stopwatchs.end();
         }
 
-        return LANG_PROPS_SERVICE.get("contentRenderFailedLabel");
+        return langPropsService.get("contentRenderFailedLabel");
     }
 
     private static String toHtmlByMarked(final String markdownText) throws Exception {

@@ -1,6 +1,6 @@
 /*
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -17,20 +17,33 @@
  */
 package org.b3log.solo;
 
+import org.apache.commons.lang.RandomStringUtils;
+import org.b3log.latke.Keys;
 import org.b3log.latke.Latkes;
-import org.b3log.latke.ioc.LatkeBeanManager;
-import org.b3log.latke.ioc.Lifecycle;
-import org.b3log.latke.ioc.config.Discoverer;
+import org.b3log.latke.ioc.BeanManager;
+import org.b3log.latke.ioc.Discoverer;
+import org.b3log.latke.model.User;
 import org.b3log.latke.repository.jdbc.util.Connections;
 import org.b3log.latke.repository.jdbc.util.JdbcRepositories;
-import org.b3log.solo.api.MetaWeblogAPI;
+import org.b3log.latke.service.ServiceException;
+import org.b3log.latke.util.Crypts;
+import org.b3log.solo.processor.api.MetaWeblogAPI;
 import org.b3log.solo.cache.*;
+import org.b3log.solo.processor.MockDispatcherServlet;
 import org.b3log.solo.repository.*;
-import org.b3log.solo.repository.impl.*;
 import org.b3log.solo.service.*;
+import org.b3log.solo.util.Solos;
+import org.json.JSONObject;
+import org.testng.Assert;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
+import org.testng.annotations.BeforeMethod;
 
+import javax.servlet.http.Cookie;
+import javax.servlet.http.HttpServletRequest;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.lang.reflect.Method;
 import java.sql.Connection;
 import java.util.Collection;
 import java.util.Locale;
@@ -39,14 +52,15 @@ import java.util.Locale;
  * Abstract test case.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 2.3.0.11, Sep 25, 2018
+ * @version 3.0.0.0, Dec 5, 2018
+ * @since 2.9.7
  */
 public abstract class AbstractTestCase {
 
     /**
      * Bean manager.
      */
-    private LatkeBeanManager beanManager;
+    private BeanManager beanManager;
 
     /**
      * Before class.
@@ -59,18 +73,23 @@ public abstract class AbstractTestCase {
      */
     @BeforeClass
     public void beforeClass() throws Exception {
-        Latkes.initRuntimeEnv();
+        Latkes.init();
         Latkes.setLocale(Locale.SIMPLIFIED_CHINESE);
 
         final Collection<Class<?>> classes = Discoverer.discover("org.b3log.solo");
-        Lifecycle.startApplication(classes);
-        beanManager = Lifecycle.getBeanManager();
+        BeanManager.start(classes);
+        beanManager = BeanManager.getInstance();
 
         final Connection connection = Connections.getConnection();
         connection.createStatement().execute("DROP ALL OBJECTS");
         connection.close();
 
         JdbcRepositories.initAllTables();
+    }
+
+    @BeforeMethod
+    public void beforeMethod(final Method method) {
+        System.out.println(method.getDeclaringClass().getSimpleName() + "#" + method.getName());
     }
 
     /**
@@ -96,12 +115,89 @@ public abstract class AbstractTestCase {
     }
 
     /**
+     * Init solo in test.
+     *
+     * @throws Exception exception
+     */
+    public void init() throws Exception {
+        final InitService initService = getInitService();
+        final JSONObject requestJSONObject = new JSONObject();
+        requestJSONObject.put(User.USER_EMAIL, "test@gmail.com");
+        requestJSONObject.put(User.USER_NAME, "Admin");
+        requestJSONObject.put(User.USER_PASSWORD, "pass");
+        initService.init(requestJSONObject);
+        final UserQueryService userQueryService = getUserQueryService();
+        Assert.assertNotNull(userQueryService.getUserByEmailOrUserName("test@gmail.com"));
+    }
+
+    /**
+     * Mocks admin login for console testing.
+     *
+     * @param request the specified request
+     * @throws ServiceException service exception
+     */
+    public void mockAdminLogin(final MockHttpServletRequest request) throws ServiceException {
+        final JSONObject adminUser = getUserQueryService().getAdmin();
+        final String userId = adminUser.optString(Keys.OBJECT_ID);
+        final JSONObject cookieJSONObject = new JSONObject();
+        cookieJSONObject.put(Keys.OBJECT_ID, userId);
+        cookieJSONObject.put(User.USER_PASSWORD, adminUser.optString(User.USER_PASSWORD));
+        final String random = RandomStringUtils.randomAlphanumeric(16);
+        cookieJSONObject.put(Keys.TOKEN, adminUser.optString(User.USER_PASSWORD) + ":" + random);
+        final String cookieValue = Crypts.encryptByAES(cookieJSONObject.toString(), Solos.COOKIE_SECRET);
+        final Cookie cookie = new Cookie(Solos.COOKIE_NAME, cookieValue);
+        request.setCookies(new Cookie[]{cookie});
+    }
+
+    /**
+     * Gets a mock dispatcher servlet and run service.
+     *
+     * @param request  the specified request
+     * @param response the specified response
+     * @return mock dispatcher servlet
+     */
+    public MockDispatcherServlet mockDispatcherServletService(final HttpServletRequest request, final MockHttpServletResponse response) {
+        final MockDispatcherServlet ret = new MockDispatcherServlet();
+        ret.init();
+        SoloServletListener.routeConsoleProcessors();
+        ret.service(request, response);
+
+        return ret;
+    }
+
+    /**
+     * Gets a mock request.
+     *
+     * @return mock request
+     */
+    public MockHttpServletRequest mockRequest() {
+        final MockHttpServletRequest ret = new MockHttpServletRequest();
+
+        return ret;
+    }
+
+    /**
+     * Gets a mock response.
+     *
+     * @return mock response
+     */
+    public MockHttpServletResponse mockResponse() {
+        final StringWriter stringWriter = new StringWriter();
+        final PrintWriter printWriter = new PrintWriter(stringWriter);
+        final MockHttpServletResponse response = new MockHttpServletResponse();
+        response.setWriter(printWriter);
+        response.setBodyWriter(stringWriter);
+
+        return response;
+    }
+
+    /**
      * Gets category-tag repository.
      *
      * @return category-tag repository
      */
     public CategoryTagRepository getCategoryTagRepository() {
-        return beanManager.getReference(CategoryTagRepositoryImpl.class);
+        return beanManager.getReference(CategoryTagRepository.class);
     }
 
     /**
@@ -110,7 +206,7 @@ public abstract class AbstractTestCase {
      * @return category repository
      */
     public CategoryRepository getCategoryRepository() {
-        return beanManager.getReference(CategoryRepositoryImpl.class);
+        return beanManager.getReference(CategoryRepository.class);
     }
 
     /**
@@ -119,7 +215,7 @@ public abstract class AbstractTestCase {
      * @return user repository
      */
     public UserRepository getUserRepository() {
-        return beanManager.getReference(UserRepositoryImpl.class);
+        return beanManager.getReference(UserRepository.class);
     }
 
     /**
@@ -128,7 +224,7 @@ public abstract class AbstractTestCase {
      * @return link repository
      */
     public LinkRepository getLinkRepository() {
-        return beanManager.getReference(LinkRepositoryImpl.class);
+        return beanManager.getReference(LinkRepository.class);
     }
 
     /**
@@ -137,7 +233,7 @@ public abstract class AbstractTestCase {
      * @return article repository
      */
     public ArticleRepository getArticleRepository() {
-        return beanManager.getReference(ArticleRepositoryImpl.class);
+        return beanManager.getReference(ArticleRepository.class);
     }
 
     /**
@@ -146,7 +242,7 @@ public abstract class AbstractTestCase {
      * @return tag repository
      */
     public TagRepository getTagRepository() {
-        return beanManager.getReference(TagRepositoryImpl.class);
+        return beanManager.getReference(TagRepository.class);
     }
 
     /**
@@ -155,7 +251,7 @@ public abstract class AbstractTestCase {
      * @return tag-article repository
      */
     public TagArticleRepository getTagArticleRepository() {
-        return beanManager.getReference(TagArticleRepositoryImpl.class);
+        return beanManager.getReference(TagArticleRepository.class);
     }
 
     /**
@@ -164,7 +260,7 @@ public abstract class AbstractTestCase {
      * @return page repository
      */
     public PageRepository getPageRepository() {
-        return beanManager.getReference(PageRepositoryImpl.class);
+        return beanManager.getReference(PageRepository.class);
     }
 
     /**
@@ -173,7 +269,7 @@ public abstract class AbstractTestCase {
      * @return comment repository
      */
     public CommentRepository getCommentRepository() {
-        return beanManager.getReference(CommentRepositoryImpl.class);
+        return beanManager.getReference(CommentRepository.class);
     }
 
     /**
@@ -182,7 +278,7 @@ public abstract class AbstractTestCase {
      * @return archive date repository
      */
     public ArchiveDateRepository getArchiveDateRepository() {
-        return beanManager.getReference(ArchiveDateRepositoryImpl.class);
+        return beanManager.getReference(ArchiveDateRepository.class);
     }
 
     /**
@@ -191,7 +287,7 @@ public abstract class AbstractTestCase {
      * @return archive date article repository
      */
     public ArchiveDateArticleRepository getArchiveDateArticleRepository() {
-        return beanManager.getReference(ArchiveDateArticleRepositoryImpl.class);
+        return beanManager.getReference(ArchiveDateArticleRepository.class);
     }
 
     /**
@@ -200,7 +296,7 @@ public abstract class AbstractTestCase {
      * @return plugin repository
      */
     public PluginRepository getPluginRepository() {
-        return beanManager.getReference(PluginRepositoryImpl.class);
+        return beanManager.getReference(PluginRepository.class);
     }
 
     /**
@@ -209,7 +305,7 @@ public abstract class AbstractTestCase {
      * @return option repository
      */
     public OptionRepository getOptionRepository() {
-        return beanManager.getReference(OptionRepositoryImpl.class);
+        return beanManager.getReference(OptionRepository.class);
     }
 
     /**

@@ -1,6 +1,6 @@
 /*
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -17,7 +17,7 @@
  */
 package org.b3log.solo.service;
 
-import org.b3log.latke.ioc.inject.Inject;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.repository.Query;
@@ -93,15 +93,14 @@ public class TagQueryService {
      * Gets the count of tags.
      *
      * @return count of tags
-     * @throws ServiceException service exception
      */
-    public long getTagCount() throws ServiceException {
+    public long getTagCount() {
         try {
             return tagRepository.count();
         } catch (final RepositoryException e) {
             LOGGER.log(Level.ERROR, "Gets tags failed", e);
 
-            throw new ServiceException(e);
+            return 0;
         }
     }
 

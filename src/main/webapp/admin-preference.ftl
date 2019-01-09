@@ -1,7 +1,7 @@
 <#--
 
     Solo - A small and beautiful blogging system written in Java.
-    Copyright (c) 2010-2018, b3log.org & hacpai.com
+    Copyright (c) 2010-2019, b3log.org & hacpai.com
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -40,8 +40,8 @@
             </div>
         </li>
         <li>
-            <div id="tabPreference_qiniu">
-                <a href="#toos/preference/qiniu">${qiniuLabel}</a>
+            <div id="tabPreference_oss">
+                <a href="#toos/preference/oss">${ossServerLabel}</a>
             </div>
         </li>
         <li>
@@ -129,7 +129,9 @@
             <option value="fullContent">${fullContentLabel}</option>
         </select>
         <label for="feedOutputCnt">${feedOutputCnt1Label}</label>
-        <input id="feedOutputCnt" class="normalInput" type="text"/><br/><br/>
+        <input id="feedOutputCnt" class="normalInput" type="text"/>
+        <label for="customVars">${customVars1Label}</label>
+        <input id="customVars" class="normalInput" type="text"/><br/><br/>
         <button class="right" onclick="admin.preference.update()">${updateLabel}</button>
         <div class="clear"></div>
     </div>
@@ -170,21 +172,32 @@
         <button onclick="admin.preference.update()" class="right">${updateLabel}</button>
         <div class="clear"></div>
     </div>
-    <div id="tabPreferencePanel_qiniu" class="none form">
-        <span class="right">
+    <div id="tabPreferencePanel_oss" class="none form">
+         <span class="right">
             <a href="https://hacpai.com/article/1442418791213" target="_blank">${howConfigLabel}</a>
             &nbsp;
-            <button onclick="admin.preference.updateQiniu()">${updateLabel}</button>
+            <button onclick="admin.preference.updateOss()">${updateLabel}</button>
         </span>
-        <div class="clear"></div>
-        <label for="qiniuAccessKey">${accessKey1Label}</label>
-        <input id="qiniuAccessKey" type="text"/>
-        <label for="qiniuSecretKey">${secretKey1Label}</label>
-        <input id="qiniuSecretKey" type="text"/>
-        <label for="qiniuDomain">${domain1Label}</label>
-        <input id="qiniuDomain" type="text"/>
-        <label for="qiniuBucket">${bucket1Label}</label>
-        <input id="qiniuBucket" type="text"/>
+        <span class="clear"></span>
+        <span class="fn__flex-inline">
+            <label class="fn__flex-inline">
+            ${qiniuOssLabel}
+                <input name="ossServer" type="radio" value="qiniu" onclick="admin.preference.ossServerChange()"/>
+            </label>
+            <span>&nbsp; &nbsp; &nbsp;</span>
+            <label class="fn__flex-inline">
+            ${aliyunOssLabel}
+                <input name="ossServer" type="radio" value="aliyun" onclick="admin.preference.ossServerChange()"/>
+            </label>
+        </span>
+        <label for="osSAccessKey">${accessKey1Label}</label>
+        <input id="ossAccessKey" type="text" />
+        <label for="ossSecretKey">${secretKey1Label}</label>
+        <input id="ossSecretKey" type="text"/>
+        <label for="ossDomain">${domain1Label}</label>
+        <input id="ossDomain" type="text"/>
+        <label for="ossBucket">${bucket1Label}</label>
+        <input id="ossBucket" type="text"/>
     </div>
 </div>
 ${plugins}

@@ -1,6 +1,6 @@
 /*
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -22,9 +22,8 @@ import org.apache.commons.lang.time.DateFormatUtils;
 import org.apache.commons.lang.time.DateUtils;
 import org.b3log.latke.Keys;
 import org.b3log.latke.event.Event;
-import org.b3log.latke.event.EventException;
 import org.b3log.latke.event.EventManager;
-import org.b3log.latke.ioc.inject.Inject;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.repository.RepositoryException;
@@ -52,7 +51,7 @@ import static org.b3log.solo.model.Article.*;
  * Article management service.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.2.2.12, Sep 16, 2018
+ * @version 1.2.2.14, Dec 10, 2018
  * @since 0.3.5
  */
 @Service
@@ -182,9 +181,7 @@ public class ArticleMgmtService {
         final JSONObject article = articleRepository.get(articleId);
         final JSONObject newArticle = new JSONObject(article, JSONObject.getNames(article));
         final int commentCnt = article.getInt(Article.ARTICLE_COMMENT_COUNT);
-
         newArticle.put(Article.ARTICLE_COMMENT_COUNT, commentCnt + 1);
-
         articleRepository.update(articleId, newArticle);
     }
 
@@ -240,9 +237,7 @@ public class ArticleMgmtService {
 
         try {
             final JSONObject topArticle = articleRepository.get(articleId);
-
             topArticle.put(ARTICLE_PUT_TOP, top);
-
             articleRepository.update(articleId, topArticle);
 
             transaction.commit();
@@ -266,7 +261,7 @@ public class ArticleMgmtService {
      *                          "articleTitle": "",
      *                          "articleAbstract": "",
      *                          "articleContent": "",
-     *                          "articleTags": "tag1,tag2,tag3",
+     *                          "articleTags": "tag1,tag2,tag3", // optional, default set "待分类"
      *                          "articlePermalink": "", // optional
      *                          "articleIsPublished": boolean,
      *                          "articleSignId": "", // optional
@@ -287,7 +282,7 @@ public class ArticleMgmtService {
             String tagsString = article.optString(Article.ARTICLE_TAGS_REF);
             tagsString = Tag.formatTags(tagsString);
             if (StringUtils.isBlank(tagsString)) {
-                throw new ServiceException(langPropsService.get("tagsEmptyLabel"));
+                tagsString = "待分类";
             }
             article.put(Article.ARTICLE_TAGS_REF, tagsString);
 
@@ -349,7 +344,6 @@ public class ArticleMgmtService {
                 statisticMgmtService.incPublishedBlogArticleCount();
                 final int blogCmtCnt = statisticQueryService.getPublishedBlogCommentCount();
                 final int articleCmtCnt = article.getInt(ARTICLE_COMMENT_COUNT);
-
                 statisticMgmtService.setPublishedBlogCommentCount(blogCmtCnt + articleCmtCnt);
 
                 final JSONObject author = userRepository.get(article.optString(Article.ARTICLE_AUTHOR_ID));
@@ -370,25 +364,15 @@ public class ArticleMgmtService {
             if (publishNewArticle) {
                 // Fire add article event
                 final JSONObject eventData = new JSONObject();
-
                 eventData.put(ARTICLE, article);
                 eventData.put(Keys.RESULTS, ret);
-                try {
-                    eventManager.fireEventSynchronously(new Event<>(EventTypes.ADD_ARTICLE, eventData));
-                } catch (final EventException e) {
-                    LOGGER.log(Level.ERROR, e.getMessage(), e);
-                }
+                eventManager.fireEventSynchronously(new Event<>(EventTypes.ADD_ARTICLE, eventData));
             } else {
                 // Fire update article event
                 final JSONObject eventData = new JSONObject();
-
                 eventData.put(ARTICLE, article);
                 eventData.put(Keys.RESULTS, ret);
-                try {
-                    eventManager.fireEventSynchronously(new Event<>(EventTypes.UPDATE_ARTICLE, eventData));
-                } catch (final EventException e) {
-                    LOGGER.log(Level.ERROR, e.getMessage(), e);
-                }
+                eventManager.fireEventSynchronously(new Event<>(EventTypes.UPDATE_ARTICLE, eventData));
             }
 
             transaction.commit();
@@ -462,93 +446,83 @@ public class ArticleMgmtService {
      */
     public String addArticleInternal(final JSONObject article) throws ServiceException {
         String ret = article.optString(Keys.OBJECT_ID);
-
         if (StringUtils.isBlank(ret)) {
             ret = Ids.genTimeMillisId();
             article.put(Keys.OBJECT_ID, ret);
         }
 
         try {
-            // Step 1: Add tags
             String tagsString = article.optString(Article.ARTICLE_TAGS_REF);
             tagsString = Tag.formatTags(tagsString);
             if (StringUtils.isBlank(tagsString)) {
-                throw new ServiceException(langPropsService.get("tagsEmptyLabel"));
+                tagsString = "待分类";
             }
             article.put(Article.ARTICLE_TAGS_REF, tagsString);
             final String[] tagTitles = tagsString.split(",");
             final JSONArray tags = tag(tagTitles, article);
-            // Step 2; Set comment/view count to 0
+
             article.put(Article.ARTICLE_COMMENT_COUNT, 0);
             article.put(Article.ARTICLE_VIEW_COUNT, 0);
-            // Step 3: Set create/updat date
             final JSONObject preference = preferenceQueryService.getPreference();
             if (!article.has(Article.ARTICLE_CREATED)) {
                 article.put(Article.ARTICLE_CREATED, System.currentTimeMillis());
             }
             article.put(Article.ARTICLE_UPDATED, article.optLong(Article.ARTICLE_CREATED));
-            // Step 4: Set put top to false
             article.put(Article.ARTICLE_PUT_TOP, false);
-            // Step 5: Add tag-article relations
+
             addTagArticleRelation(tags, article);
-            // Step 6: Inc blog article count statictis
+
             statisticMgmtService.incBlogArticleCount();
             if (article.optBoolean(Article.ARTICLE_IS_PUBLISHED)) {
                 statisticMgmtService.incPublishedBlogArticleCount();
             }
-            // Step 7: Add archive date-article relations
+
             archiveDate(article);
-            // Step 8: Set permalink
+
             final String permalink = getPermalinkForAddArticle(article);
             article.put(Article.ARTICLE_PERMALINK, permalink);
-            // Step 9: Add article sign id
+
             final String signId = article.optString(Article.ARTICLE_SIGN_ID, "1");
             article.put(Article.ARTICLE_SIGN_ID, signId);
-            // Step 10: Set had been published status
+
             article.put(Article.ARTICLE_HAD_BEEN_PUBLISHED, false);
             if (article.optBoolean(Article.ARTICLE_IS_PUBLISHED)) {
                 // Publish it directly
                 article.put(Article.ARTICLE_HAD_BEEN_PUBLISHED, true);
             }
-            // Step 11: Set random double
-            article.put(Article.ARTICLE_RANDOM_DOUBLE, Math.random());
-            // Step 12: Set post to community
-            final boolean postToCommunity = article.optBoolean(Common.POST_TO_COMMUNITY, true);
 
+            article.put(Article.ARTICLE_RANDOM_DOUBLE, Math.random());
+
+            final boolean postToCommunity = article.optBoolean(Common.POST_TO_COMMUNITY, true);
             article.remove(Common.POST_TO_COMMUNITY); // Do not persist this property
-            // Setp 13: Update user article statistic
+
             final JSONObject author = userRepository.get(article.optString(Article.ARTICLE_AUTHOR_ID));
             final int userArticleCnt = author.optInt(UserExt.USER_ARTICLE_COUNT);
-
             author.put(UserExt.USER_ARTICLE_COUNT, userArticleCnt + 1);
             if (article.optBoolean(Article.ARTICLE_IS_PUBLISHED)) {
                 author.put(UserExt.USER_PUBLISHED_ARTICLE_COUNT, author.optInt(UserExt.USER_PUBLISHED_ARTICLE_COUNT) + 1);
             }
             userRepository.update(author.optString(Keys.OBJECT_ID), author);
-            // Step 14: Set editor type
+
             if (!article.has(Article.ARTICLE_EDITOR_TYPE)) {
                 article.put(Article.ARTICLE_EDITOR_TYPE, preference.optString(Option.ID_C_EDITOR_TYPE));
             }
-            // Step 15: Add article
+
             articleRepository.add(article);
 
             article.put(Common.POST_TO_COMMUNITY, postToCommunity); // Restores the property
 
             if (article.optBoolean(Article.ARTICLE_IS_PUBLISHED)) {
-                // Fire add article event
                 final JSONObject eventData = new JSONObject();
-
                 eventData.put(Article.ARTICLE, article);
                 eventManager.fireEventSynchronously(new Event<>(EventTypes.ADD_ARTICLE, eventData));
             }
 
             article.remove(Common.POST_TO_COMMUNITY);
-        } catch (final RepositoryException e) {
+        } catch (final Exception e) {
             LOGGER.log(Level.ERROR, "Adds an article failed", e);
 
             throw new ServiceException(e);
-        } catch (final EventException e) {
-            LOGGER.log(Level.WARN, "Adds an article event process failed", e);
         }
 
         return ret;
@@ -1035,14 +1009,12 @@ public class ArticleMgmtService {
         final long created = article.optLong(Article.ARTICLE_CREATED);
         final String createDateString = DateFormatUtils.format(created, "yyyy/MM");
         JSONObject archiveDate = archiveDateRepository.getByArchiveDate(createDateString);
-
         if (null == archiveDate) {
             archiveDate = new JSONObject();
             try {
                 archiveDate.put(ArchiveDate.ARCHIVE_TIME, DateUtils.parseDate(createDateString, new String[]{"yyyy/MM"}).getTime());
                 archiveDate.put(ArchiveDate.ARCHIVE_DATE_ARTICLE_COUNT, 0);
                 archiveDate.put(ArchiveDate.ARCHIVE_DATE_PUBLISHED_ARTICLE_COUNT, 0);
-
                 archiveDateRepository.add(archiveDate);
             } catch (final ParseException e) {
                 LOGGER.log(Level.ERROR, e.getMessage(), e);
@@ -1051,7 +1023,6 @@ public class ArticleMgmtService {
         }
 
         final JSONObject newArchiveDate = new JSONObject(archiveDate, CollectionUtils.jsonArrayToArray(archiveDate.names(), String[].class));
-
         newArchiveDate.put(ArchiveDate.ARCHIVE_DATE_ARTICLE_COUNT, archiveDate.optInt(ArchiveDate.ARCHIVE_DATE_ARTICLE_COUNT) + 1);
         if (article.optBoolean(Article.ARTICLE_IS_PUBLISHED)) {
             newArchiveDate.put(ArchiveDate.ARCHIVE_DATE_PUBLISHED_ARTICLE_COUNT,
@@ -1060,10 +1031,8 @@ public class ArticleMgmtService {
         archiveDateRepository.update(archiveDate.optString(Keys.OBJECT_ID), newArchiveDate);
 
         final JSONObject archiveDateArticleRelation = new JSONObject();
-
         archiveDateArticleRelation.put(ArchiveDate.ARCHIVE_DATE + "_" + Keys.OBJECT_ID, archiveDate.optString(Keys.OBJECT_ID));
         archiveDateArticleRelation.put(Article.ARTICLE + "_" + Keys.OBJECT_ID, article.optString(Keys.OBJECT_ID));
-
         archiveDateArticleRepository.add(archiveDateArticleRelation);
     }
 

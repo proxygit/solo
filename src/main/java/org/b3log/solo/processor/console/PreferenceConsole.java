@@ -1,6 +1,6 @@
 /*
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -19,17 +19,15 @@ package org.b3log.solo.processor.console;
 
 import org.apache.commons.lang.StringUtils;
 import org.b3log.latke.Keys;
-import org.b3log.latke.ioc.inject.Inject;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.service.LangPropsService;
 import org.b3log.latke.service.ServiceException;
-import org.b3log.latke.servlet.HTTPRequestContext;
-import org.b3log.latke.servlet.HTTPRequestMethod;
+import org.b3log.latke.servlet.RequestContext;
 import org.b3log.latke.servlet.annotation.Before;
-import org.b3log.latke.servlet.annotation.RequestProcessing;
 import org.b3log.latke.servlet.annotation.RequestProcessor;
-import org.b3log.latke.servlet.renderer.JSONRenderer;
+import org.b3log.latke.servlet.renderer.JsonRenderer;
 import org.b3log.solo.model.Option;
 import org.b3log.solo.model.Sign;
 import org.b3log.solo.model.Skin;
@@ -41,29 +39,27 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import javax.servlet.http.Cookie;
-import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.util.Arrays;
+
+import static org.b3log.solo.model.Option.*;
 
 /**
  * Preference console request processing.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.2.0.13, Sep 25, 2018
+ * @author <a href="https://github.com/hzchendou">hzchendou</a>
+ * @version 1.2.0.19, Dec 24, 2018
  * @since 0.4.0
  */
 @RequestProcessor
-@Before(adviceClass = ConsoleAdminAuthAdvice.class)
+@Before(ConsoleAdminAuthAdvice.class)
 public class PreferenceConsole {
 
     /**
      * Logger.
      */
     private static final Logger LOGGER = Logger.getLogger(PreferenceConsole.class);
-
-    /**
-     * Preference URI prefix.
-     */
-    private static final String PREFERENCE_URI_PREFIX = "/console/preference/";
 
     /**
      * Preference query service.
@@ -110,15 +106,10 @@ public class PreferenceConsole {
      * </pre>
      * </p>
      *
-     * @param request  the specified http servlet request
-     * @param response the specified http servlet response
-     * @param context  the specified http request context
+     * @param context the specified http request context
      */
-    @RequestProcessing(value = "/console/reply/notification/template", method = HTTPRequestMethod.GET)
-    public void getReplyNotificationTemplate(final HttpServletRequest request,
-                                             final HttpServletResponse response,
-                                             final HTTPRequestContext context) {
-        final JSONRenderer renderer = new JSONRenderer();
+    public void getReplyNotificationTemplate(final RequestContext context) {
+        final JsonRenderer renderer = new JsonRenderer();
         context.setRenderer(renderer);
 
         try {
@@ -139,25 +130,27 @@ public class PreferenceConsole {
 
     /**
      * Updates reply template.
+     * <p>
+     * <p>
+     * Request json:
+     * <pre>
+     * {
+     *     "replyNotificationTemplate": {
+     *         "subject": "",
+     *         "body": ""
+     *     }
+     * }
+     * </pre>
+     * </p>
      *
-     * @param request           the specified http servlet request
-     * @param response          the specified http servlet response
-     * @param context           the specified http request context
-     * @param requestJSONObject the specified request json object, for example,
-     *                          "replyNotificationTemplate": {
-     *                          "subject": "",
-     *                          "body": ""
-     *                          }
+     * @param context the specified http request context
      */
-    @RequestProcessing(value = "/console/reply/notification/template", method = HTTPRequestMethod.PUT)
-    public void updateReplyNotificationTemplate(final HttpServletRequest request,
-                                                final HttpServletResponse response,
-                                                final HTTPRequestContext context,
-                                                final JSONObject requestJSONObject) {
-        final JSONRenderer renderer = new JSONRenderer();
+    public void updateReplyNotificationTemplate(final RequestContext context) {
+        final JsonRenderer renderer = new JsonRenderer();
         context.setRenderer(renderer);
 
         try {
+            final JSONObject requestJSONObject = context.requestJSON();
             final JSONObject replyNotificationTemplate = requestJSONObject.getJSONObject("replyNotificationTemplate");
             preferenceMgmtService.updateReplyNotificationTemplate(replyNotificationTemplate);
 
@@ -189,20 +182,16 @@ public class PreferenceConsole {
      * </pre>
      * </p>
      *
-     * @param request  the specified http servlet request
-     * @param response the specified http servlet response
-     * @param context  the specified http request context
+     * @param context the specified http request context
      */
-    @RequestProcessing(value = "/console/signs/", method = HTTPRequestMethod.GET)
-    public void getSigns(final HttpServletRequest request, final HttpServletResponse response, final HTTPRequestContext context) {
-        final JSONRenderer renderer = new JSONRenderer();
+    public void getSigns(final RequestContext context) {
+        final JsonRenderer renderer = new JsonRenderer();
         context.setRenderer(renderer);
 
         try {
             final JSONObject preference = preferenceQueryService.getPreference();
             final JSONArray signs = new JSONArray();
-            final JSONArray allSigns
-                    = // includes the empty sign(id=0)
+            final JSONArray allSigns = // includes the empty sign(id=0)
                     new JSONArray(preference.getString(Option.ID_C_SIGNS));
 
             for (int i = 1; i < allSigns.length(); i++) { // excludes the empty sign
@@ -266,19 +255,17 @@ public class PreferenceConsole {
      *         "articleListStyle": "", // Optional values: "titleOnly"/"titleAndContent"/"titleAndAbstract"
      *         "commentable": boolean,
      *         "feedOutputMode: "" // Optional values: "abstract"/"full"
-     *         "feedOutputCnt": int
+     *         "feedOutputCnt": int,
+     *         "customVars" "", // 支持配置自定义参数 https://github.com/b3log/solo/issues/12535
      *     }
      * }
      * </pre>
      * </p>
      *
-     * @param request  the specified http servlet request
-     * @param response the specified http servlet response
-     * @param context  the specified http request context
+     * @param context the specified http request context
      */
-    @RequestProcessing(value = PREFERENCE_URI_PREFIX, method = HTTPRequestMethod.GET)
-    public void getPreference(final HttpServletRequest request, final HttpServletResponse response, final HTTPRequestContext context) {
-        final JSONRenderer renderer = new JSONRenderer();
+    public void getPreference(final RequestContext context) {
+        final JsonRenderer renderer = new JsonRenderer();
         context.setRenderer(renderer);
 
         try {
@@ -311,53 +298,57 @@ public class PreferenceConsole {
 
     /**
      * Updates the preference by the specified request.
+     * <p>
+     * <p>
+     * Request json:
+     * <pre>
+     * {
+     *     "preference": {
+     *         "mostViewArticleDisplayCount": int,
+     *         "recentCommentDisplayCount": int,
+     *         "mostUsedTagDisplayCount": int,
+     *         "articleListDisplayCount": int,
+     *         "articleListPaginationWindowSize": int,
+     *         "mostCommentArticleDisplayCount": int,
+     *         "externalRelevantArticlesDisplayCount": int,
+     *         "relevantArticlesDisplayCount": int,
+     *         "randomArticlesDisplayCount": int,
+     *         "blogTitle": "",
+     *         "blogSubtitle": "",
+     *         "skinDirName": "",
+     *         "localeString": "",
+     *         "timeZoneId": "",
+     *         "noticeBoard": "",
+     *         "footerContent": "",
+     *         "htmlHead": "",
+     *         "metaKeywords": "",
+     *         "metaDescription": "",
+     *         "enableArticleUpdateHint": boolean,
+     *         "signs": [{
+     *             "oId": "",
+     *             "signHTML": ""
+     *             }, ...],
+     *         "allowVisitDraftViaPermalink": boolean,
+     *         "allowRegister": boolean,
+     *         "articleListStyle": "",
+     *         "editorType": "",
+     *         "commentable": boolean,
+     *         "feedOutputMode: "",
+     *         "feedOutputCnt": int,
+     *         "customVars" "", // 支持配置自定义参数 https://github.com/b3log/solo/issues/12535
+     *     }
+     * }
+     * </pre>
+     * </p>
      *
-     * @param request           the specified http servlet request
-     * @param response          the specified http servlet response
-     * @param context           the specified http request context
-     * @param requestJSONObject the specified reuqest json object, for example,
-     *                          "preference": {
-     *                          "mostViewArticleDisplayCount": int,
-     *                          "recentCommentDisplayCount": int,
-     *                          "mostUsedTagDisplayCount": int,
-     *                          "articleListDisplayCount": int,
-     *                          "articleListPaginationWindowSize": int,
-     *                          "mostCommentArticleDisplayCount": int,
-     *                          "externalRelevantArticlesDisplayCount": int,
-     *                          "relevantArticlesDisplayCount": int,
-     *                          "randomArticlesDisplayCount": int,
-     *                          "blogTitle": "",
-     *                          "blogSubtitle": "",
-     *                          "skinDirName": "",
-     *                          "localeString": "",
-     *                          "timeZoneId": "",
-     *                          "noticeBoard": "",
-     *                          "footerContent": "",
-     *                          "htmlHead": "",
-     *                          "metaKeywords": "",
-     *                          "metaDescription": "",
-     *                          "enableArticleUpdateHint": boolean,
-     *                          "signs": [{
-     *                          "oId": "",
-     *                          "signHTML": ""
-     *                          }, ...],
-     *                          "allowVisitDraftViaPermalink": boolean,
-     *                          "allowRegister": boolean,
-     *                          "articleListStyle": "",
-     *                          "editorType": "",
-     *                          "commentable": boolean,
-     *                          "feedOutputMode: "",
-     *                          "feedOutputCnt": int
-     *                          }
-     * @throws Exception exception
+     * @param context the specified http request context
      */
-    @RequestProcessing(value = PREFERENCE_URI_PREFIX, method = HTTPRequestMethod.PUT)
-    public void updatePreference(final HttpServletRequest request, final HttpServletResponse response, final HTTPRequestContext context,
-                                 final JSONObject requestJSONObject) throws Exception {
-        final JSONRenderer renderer = new JSONRenderer();
+    public void updatePreference(final RequestContext context) {
+        final JsonRenderer renderer = new JsonRenderer();
         context.setRenderer(renderer);
 
         try {
+            final JSONObject requestJSONObject = context.requestJSON();
             final JSONObject preference = requestJSONObject.getJSONObject(Option.CATEGORY_C_PREFERENCE);
             final JSONObject ret = new JSONObject();
             renderer.setJSONObject(ret);
@@ -367,6 +358,7 @@ public class PreferenceConsole {
 
             preferenceMgmtService.updatePreference(preference);
 
+            final HttpServletResponse response = context.getResponse();
             final Cookie cookie = new Cookie(Skin.SKIN, preference.getString(Skin.SKIN_DIR_NAME));
             cookie.setMaxAge(60 * 60); // 1 hour
             cookie.setPath("/");
@@ -384,41 +376,50 @@ public class PreferenceConsole {
     }
 
     /**
-     * Gets Qiniu preference.
+     * Gets Oss preference.
      * <p>
      * Renders the response with a json object, for example,
      * <pre>
      * {
      *     "sc": boolean,
-     *     "qiniuAccessKey": "",
-     *     "qiniuSecretKey": "",
-     *     "qiniuDomain": "",
-     *     "qiniuBucket": ""
+     *     oss: {
+     *         "ossServer":"",
+     *         "ossAccessKey": "",
+     *         "ossSecretKey": "",
+     *         "ossDomain": "",
+     *         "ossBucket": ""
+     *     }
      * }
      * </pre>
      * </p>
      *
-     * @param request  the specified http servlet request
-     * @param response the specified http servlet response
-     * @param context  the specified http request context
+     * @param context the specified http request context
      */
-    @RequestProcessing(value = PREFERENCE_URI_PREFIX + "qiniu", method = HTTPRequestMethod.GET)
-    public void getQiniuPreference(final HttpServletRequest request, final HttpServletResponse response,
-                                   final HTTPRequestContext context) {
-        final JSONRenderer renderer = new JSONRenderer();
+    public void getOssPreference(final RequestContext context) {
+        final JsonRenderer renderer = new JsonRenderer();
         context.setRenderer(renderer);
+        final JSONObject ret = new JSONObject();
+        renderer.setJSONObject(ret);
 
         try {
-            final JSONObject qiniu = optionQueryService.getOptions(Option.CATEGORY_C_QINIU);
-            if (null == qiniu) {
-                renderer.setJSONObject(new JSONObject().put(Keys.STATUS_CODE, false));
-
-                return;
+            String ossServerVal = CATEGORY_C_QINIU;
+            // 前端服务商切换 ossServer
+            String ossServerTemp = context.param(ID_C_CLOUD_STORAGE_KEY);
+            if (StringUtils.isNotBlank(ossServerTemp)) {
+                ossServerVal = ossServerTemp;
+            } else {
+                final JSONObject ossServer = optionQueryService.getOptions(CATEGORY_C_CLOU_STORAGE);
+                if (ossServer != null) {
+                    ossServerVal = ossServer.getString(ID_C_CLOUD_STORAGE_KEY);
+                }
             }
 
-            final JSONObject ret = new JSONObject();
-            renderer.setJSONObject(ret);
-            ret.put(Option.CATEGORY_C_QINIU, qiniu);
+            JSONObject oss = optionQueryService.getOptions(ossServerVal);
+            if (null == oss) {
+                oss = new JSONObject();
+            }
+
+            ret.put("oss", convertOssOpts(ossServerVal, oss));
             ret.put(Keys.STATUS_CODE, true);
         } catch (final Exception e) {
             LOGGER.log(Level.ERROR, e.getMessage(), e);
@@ -430,60 +431,82 @@ public class PreferenceConsole {
     }
 
     /**
-     * Updates the Qiniu preference by the specified request.
+     * Updates the Oss preference by the specified request.
      *
-     * @param request           the specified http servlet request
-     * @param response          the specified http servlet response
-     * @param context           the specified http request context
-     * @param requestJSONObject the specified request json object, for example,
-     *                          "qiniuAccessKey": "",
-     *                          "qiniuSecretKey": "",
-     *                          "qiniuDomain": "",
-     *                          "qiniuBucket": ""
+     * <p>
+     * Request json:
+     * <pre>
+     * {
+     *     "ossAccessKey": "",
+     *     "ossSecretKey": "",
+     *     "ossDomain": "",
+     *     "ossBucket": ""
+     * }
+     * </pre>
+     * </p>
+     *
+     * @param context the specified http request context
      */
-    @RequestProcessing(value = PREFERENCE_URI_PREFIX + "qiniu", method = HTTPRequestMethod.PUT)
-    public void updateQiniu(final HttpServletRequest request, final HttpServletResponse response,
-                            final HTTPRequestContext context, final JSONObject requestJSONObject) {
-        final JSONRenderer renderer = new JSONRenderer();
+    public void updateOss(final RequestContext context) {
+        final JsonRenderer renderer = new JsonRenderer();
         context.setRenderer(renderer);
-
+        final JSONObject ret = new JSONObject();
+        renderer.setJSONObject(ret);
         try {
-            final String accessKey = requestJSONObject.optString(Option.ID_C_QINIU_ACCESS_KEY).trim();
-            final String secretKey = requestJSONObject.optString(Option.ID_C_QINIU_SECRET_KEY).trim();
-            String domain = requestJSONObject.optString(Option.ID_C_QINIU_DOMAIN).trim();
-            final String bucket = requestJSONObject.optString(Option.ID_C_QINIU_BUCKET).trim();
-
-            final JSONObject ret = new JSONObject();
-            renderer.setJSONObject(ret);
-
+            final JSONObject requestJSONObject = context.requestJSON();
+            String ossServer = requestJSONObject.optString(ID_C_CLOUD_STORAGE_KEY).trim();
+            if (StringUtils.isBlank(ossServer)) {
+                ossServer = CATEGORY_C_QINIU;
+            }
+            final String accessKey = requestJSONObject.optString("ossAccessKey").trim();
+            final String secretKey = requestJSONObject.optString("ossSecretKey").trim();
+            String domain = requestJSONObject.optString("ossDomain").trim();
+            domain = StringUtils.lowerCase(domain);
+            final String bucket = requestJSONObject.optString("ossBucket").trim();
             if (StringUtils.isNotBlank(domain) && !StringUtils.endsWith(domain, "/")) {
                 domain += "/";
             }
+            if (StringUtils.isNotBlank(domain) && !StringUtils.startsWithAny(domain, new String[]{"http", "https"})) {
+                domain = "http://" + domain;
+            }
+
+            boolean isAliyunServer = StringUtils.endsWithIgnoreCase(ossServer, CATEGORY_C_ALIYUN);
+
+            final JSONObject ossServerKeyOpt = new JSONObject();
+            ossServerKeyOpt.put(Keys.OBJECT_ID, ID_C_CLOUD_STORAGE_KEY);
+            ossServerKeyOpt.put(Option.OPTION_CATEGORY, CATEGORY_C_CLOU_STORAGE);
+            ossServerKeyOpt.put(Option.OPTION_VALUE, ossServer);
+            optionMgmtService.addOrUpdateOption(ossServerKeyOpt);
 
             final JSONObject accessKeyOpt = new JSONObject();
-            accessKeyOpt.put(Keys.OBJECT_ID, Option.ID_C_QINIU_ACCESS_KEY);
-            accessKeyOpt.put(Option.OPTION_CATEGORY, Option.CATEGORY_C_QINIU);
+            accessKeyOpt.put(Keys.OBJECT_ID, isAliyunServer ? ID_C_ALIYUN_ACCESS_KEY : ID_C_QINIU_ACCESS_KEY);
+            accessKeyOpt.put(Option.OPTION_CATEGORY, ossServer);
             accessKeyOpt.put(Option.OPTION_VALUE, accessKey);
-            final JSONObject secretKeyOpt = new JSONObject();
-            secretKeyOpt.put(Keys.OBJECT_ID, Option.ID_C_QINIU_SECRET_KEY);
-            secretKeyOpt.put(Option.OPTION_CATEGORY, Option.CATEGORY_C_QINIU);
-            secretKeyOpt.put(Option.OPTION_VALUE, secretKey);
-            final JSONObject domainOpt = new JSONObject();
-            domainOpt.put(Keys.OBJECT_ID, Option.ID_C_QINIU_DOMAIN);
-            domainOpt.put(Option.OPTION_CATEGORY, Option.CATEGORY_C_QINIU);
-            domainOpt.put(Option.OPTION_VALUE, domain);
-            final JSONObject bucketOpt = new JSONObject();
-            bucketOpt.put(Keys.OBJECT_ID, Option.ID_C_QINIU_BUCKET);
-            bucketOpt.put(Option.OPTION_CATEGORY, Option.CATEGORY_C_QINIU);
-            bucketOpt.put(Option.OPTION_VALUE, bucket);
-
             optionMgmtService.addOrUpdateOption(accessKeyOpt);
+
+            final JSONObject secretKeyOpt = new JSONObject();
+            secretKeyOpt.put(Keys.OBJECT_ID, isAliyunServer ? ID_C_ALIYUN_SECRET_KEY : ID_C_QINIU_SECRET_KEY);
+            secretKeyOpt.put(Option.OPTION_CATEGORY, ossServer);
+            secretKeyOpt.put(Option.OPTION_VALUE, secretKey);
             optionMgmtService.addOrUpdateOption(secretKeyOpt);
+
+            final JSONObject domainOpt = new JSONObject();
+            domainOpt.put(Keys.OBJECT_ID, isAliyunServer ? ID_C_ALIYUN_DOMAIN : ID_C_QINIU_DOMAIN);
+            domainOpt.put(Option.OPTION_CATEGORY, ossServer);
+            domainOpt.put(Option.OPTION_VALUE, domain);
             optionMgmtService.addOrUpdateOption(domainOpt);
+
+            final JSONObject bucketOpt = new JSONObject();
+            bucketOpt.put(Keys.OBJECT_ID, isAliyunServer ? ID_C_ALIYUN_BUCKET : ID_C_QINIU_BUCKET);
+            bucketOpt.put(Option.OPTION_CATEGORY, ossServer);
+            bucketOpt.put(Option.OPTION_VALUE, bucket);
             optionMgmtService.addOrUpdateOption(bucketOpt);
 
             ret.put(Keys.STATUS_CODE, true);
             ret.put(Keys.MSG, langPropsService.get("updateSuccLabel"));
+            if (isQiniuTestDomain(domain)) {
+                ret.put(Keys.MSG, langPropsService.get("donotUseQiniuTestDoaminLabel"));
+            }
         } catch (final ServiceException e) {
             LOGGER.log(Level.ERROR, e.getMessage(), e);
 
@@ -508,80 +531,80 @@ public class PreferenceConsole {
 
         String input = preference.optString(Option.ID_C_EXTERNAL_RELEVANT_ARTICLES_DISPLAY_CNT);
         if (!isNonNegativeInteger(input)) {
-            errMsgBuilder.append(langPropsService.get("externalRelevantArticlesDisplayCntLabel")).append("]  ").append(
-                    langPropsService.get("nonNegativeIntegerOnlyLabel"));
+            errMsgBuilder.append(langPropsService.get("externalRelevantArticlesDisplayCntLabel")).append("]  ")
+                    .append(langPropsService.get("nonNegativeIntegerOnlyLabel"));
             responseObject.put(Keys.MSG, errMsgBuilder.toString());
             return true;
         }
 
         input = preference.optString(Option.ID_C_RELEVANT_ARTICLES_DISPLAY_CNT);
         if (!isNonNegativeInteger(input)) {
-            errMsgBuilder.append(langPropsService.get("relevantArticlesDisplayCntLabel")).append("]  ").append(
-                    langPropsService.get("nonNegativeIntegerOnlyLabel"));
+            errMsgBuilder.append(langPropsService.get("relevantArticlesDisplayCntLabel")).append("]  ")
+                    .append(langPropsService.get("nonNegativeIntegerOnlyLabel"));
             responseObject.put(Keys.MSG, errMsgBuilder.toString());
             return true;
         }
 
         input = preference.optString(Option.ID_C_RANDOM_ARTICLES_DISPLAY_CNT);
         if (!isNonNegativeInteger(input)) {
-            errMsgBuilder.append(langPropsService.get("randomArticlesDisplayCntLabel")).append("]  ").append(
-                    langPropsService.get("nonNegativeIntegerOnlyLabel"));
+            errMsgBuilder.append(langPropsService.get("randomArticlesDisplayCntLabel")).append("]  ")
+                    .append(langPropsService.get("nonNegativeIntegerOnlyLabel"));
             responseObject.put(Keys.MSG, errMsgBuilder.toString());
             return true;
         }
 
         input = preference.optString(Option.ID_C_MOST_COMMENT_ARTICLE_DISPLAY_CNT);
         if (!isNonNegativeInteger(input)) {
-            errMsgBuilder.append(langPropsService.get("indexMostCommentArticleDisplayCntLabel")).append("]  ").append(
-                    langPropsService.get("nonNegativeIntegerOnlyLabel"));
+            errMsgBuilder.append(langPropsService.get("indexMostCommentArticleDisplayCntLabel")).append("]  ")
+                    .append(langPropsService.get("nonNegativeIntegerOnlyLabel"));
             responseObject.put(Keys.MSG, errMsgBuilder.toString());
             return true;
         }
 
         input = preference.optString(Option.ID_C_MOST_VIEW_ARTICLE_DISPLAY_CNT);
         if (!isNonNegativeInteger(input)) {
-            errMsgBuilder.append(langPropsService.get("indexMostViewArticleDisplayCntLabel")).append("]  ").append(
-                    langPropsService.get("nonNegativeIntegerOnlyLabel"));
+            errMsgBuilder.append(langPropsService.get("indexMostViewArticleDisplayCntLabel")).append("]  ")
+                    .append(langPropsService.get("nonNegativeIntegerOnlyLabel"));
             responseObject.put(Keys.MSG, errMsgBuilder.toString());
             return true;
         }
 
         input = preference.optString(Option.ID_C_RECENT_COMMENT_DISPLAY_CNT);
         if (!isNonNegativeInteger(input)) {
-            errMsgBuilder.append(langPropsService.get("indexRecentCommentDisplayCntLabel")).append("]  ").append(
-                    langPropsService.get("nonNegativeIntegerOnlyLabel"));
+            errMsgBuilder.append(langPropsService.get("indexRecentCommentDisplayCntLabel")).append("]  ")
+                    .append(langPropsService.get("nonNegativeIntegerOnlyLabel"));
             responseObject.put(Keys.MSG, errMsgBuilder.toString());
             return true;
         }
 
         input = preference.optString(Option.ID_C_MOST_USED_TAG_DISPLAY_CNT);
         if (!isNonNegativeInteger(input)) {
-            errMsgBuilder.append(langPropsService.get("indexTagDisplayCntLabel")).append("]  ").append(
-                    langPropsService.get("nonNegativeIntegerOnlyLabel"));
+            errMsgBuilder.append(langPropsService.get("indexTagDisplayCntLabel")).append("]  ")
+                    .append(langPropsService.get("nonNegativeIntegerOnlyLabel"));
             responseObject.put(Keys.MSG, errMsgBuilder.toString());
             return true;
         }
 
         input = preference.optString(Option.ID_C_ARTICLE_LIST_DISPLAY_COUNT);
         if (!isNonNegativeInteger(input)) {
-            errMsgBuilder.append(langPropsService.get("pageSizeLabel")).append("]  ").append(
-                    langPropsService.get("nonNegativeIntegerOnlyLabel"));
+            errMsgBuilder.append(langPropsService.get("pageSizeLabel")).append("]  ")
+                    .append(langPropsService.get("nonNegativeIntegerOnlyLabel"));
             responseObject.put(Keys.MSG, errMsgBuilder.toString());
             return true;
         }
 
         input = preference.optString(Option.ID_C_ARTICLE_LIST_PAGINATION_WINDOW_SIZE);
         if (!isNonNegativeInteger(input)) {
-            errMsgBuilder.append(langPropsService.get("windowSizeLabel")).append("]  ").append(
-                    langPropsService.get("nonNegativeIntegerOnlyLabel"));
+            errMsgBuilder.append(langPropsService.get("windowSizeLabel")).append("]  ")
+                    .append(langPropsService.get("nonNegativeIntegerOnlyLabel"));
             responseObject.put(Keys.MSG, errMsgBuilder.toString());
             return true;
         }
 
         input = preference.optString(Option.ID_C_FEED_OUTPUT_CNT);
         if (!isNonNegativeInteger(input)) {
-            errMsgBuilder.append(langPropsService.get("feedOutputCntLabel")).append("]  ").append(
-                    langPropsService.get("nonNegativeIntegerOnlyLabel"));
+            errMsgBuilder.append(langPropsService.get("feedOutputCntLabel")).append("]  ")
+                    .append(langPropsService.get("nonNegativeIntegerOnlyLabel"));
             responseObject.put(Keys.MSG, errMsgBuilder.toString());
             return true;
         }
@@ -601,5 +624,48 @@ public class PreferenceConsole {
         } catch (final Exception e) {
             return false;
         }
+    }
+
+    /**
+     * Checks whether the specified domain is a qiniu test domain.
+     *
+     * @param domain the specified domain
+     * @return {@code true} if it is, returns {@code false} otherwise
+     */
+    private boolean isQiniuTestDomain(final String domain) {
+        return Arrays.asList("clouddn.com", "qiniucdn.com", "qiniudn.com", "qnssl.com", "qbox.me").stream().
+                anyMatch(testDomain -> StringUtils.containsIgnoreCase(domain, testDomain));
+    }
+
+    /**
+     * 转换成通用 OSS 格式.
+     *
+     * @param ossServer the specified oss server
+     * @param oss       the specified oss
+     * @return converted oss
+     */
+    private static JSONObject convertOssOpts(final String ossServer, final JSONObject oss) {
+        JSONObject ret = new JSONObject();
+        ret.put("ossServer", ossServer);
+        boolean isAliyunServer = StringUtils.endsWithIgnoreCase(ossServer, CATEGORY_C_ALIYUN);
+        boolean isQiniuServer = StringUtils.endsWithIgnoreCase(ossServer, CATEGORY_C_QINIU);
+        if (isAliyunServer) {
+            ret.put("ossAccessKey", oss.optString(ID_C_ALIYUN_ACCESS_KEY));
+            ret.put("ossSecretKey", oss.optString(ID_C_ALIYUN_SECRET_KEY));
+            ret.put("ossDomain", oss.optString(ID_C_ALIYUN_DOMAIN));
+            ret.put("ossBucket", oss.optString(ID_C_ALIYUN_BUCKET));
+        } else if (isQiniuServer) {
+            ret.put("ossAccessKey", oss.optString(ID_C_QINIU_ACCESS_KEY));
+            ret.put("ossSecretKey", oss.optString(ID_C_QINIU_SECRET_KEY));
+            ret.put("ossDomain", oss.optString(ID_C_QINIU_DOMAIN));
+            ret.put("ossBucket", oss.optString(ID_C_QINIU_BUCKET));
+        } else {
+            final String msg = "Unknown OSS server [" + ossServer + "]";
+            LOGGER.log(Level.ERROR, msg);
+
+            throw new IllegalStateException(msg);
+        }
+
+        return ret;
     }
 }

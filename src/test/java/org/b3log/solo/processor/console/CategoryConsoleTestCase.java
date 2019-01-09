@@ -1,6 +1,6 @@
 /*
  * Solo - A small and beautiful blogging system written in Java.
- * Copyright (c) 2010-2018, b3log.org & hacpai.com
+ * Copyright (c) 2010-2019, b3log.org & hacpai.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -19,33 +19,23 @@ package org.b3log.solo.processor.console;
 
 import org.apache.commons.lang.StringUtils;
 import org.b3log.latke.Keys;
-import org.b3log.latke.model.User;
 import org.b3log.solo.AbstractTestCase;
+import org.b3log.solo.MockHttpServletRequest;
+import org.b3log.solo.MockHttpServletResponse;
 import org.b3log.solo.model.Category;
-import org.b3log.solo.processor.MockDispatcherServlet;
-import org.b3log.solo.service.InitService;
-import org.b3log.solo.service.UserQueryService;
+import org.b3log.solo.model.Common;
 import org.json.JSONObject;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
-import javax.servlet.ServletContext;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
 import java.io.BufferedReader;
-import java.io.PrintWriter;
 import java.io.StringReader;
-import java.io.StringWriter;
-
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 /**
  * {@link CategoryConsole} test case.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.0.0.0, Apr 22, 2017
+ * @version 1.1.0.0, Dec 10, 2018
  * @since 2.1.0
  */
 @Test(suiteName = "processor")
@@ -58,17 +48,7 @@ public class CategoryConsoleTestCase extends AbstractTestCase {
      */
     @Test
     public void init() throws Exception {
-        final InitService initService = getInitService();
-
-        final JSONObject requestJSONObject = new JSONObject();
-        requestJSONObject.put(User.USER_EMAIL, "test@gmail.com");
-        requestJSONObject.put(User.USER_NAME, "Admin");
-        requestJSONObject.put(User.USER_PASSWORD, "pass");
-
-        initService.init(requestJSONObject);
-
-        final UserQueryService userQueryService = getUserQueryService();
-        Assert.assertNotNull(userQueryService.getUserByEmailOrUserName("test@gmail.com"));
+        super.init();
     }
 
     /**
@@ -78,37 +58,44 @@ public class CategoryConsoleTestCase extends AbstractTestCase {
      */
     @Test(dependsOnMethods = "init")
     public void addCategory() throws Exception {
-        final HttpServletRequest request = mock(HttpServletRequest.class);
-        when(request.getServletContext()).thenReturn(mock(ServletContext.class));
-        when(request.getRequestURI()).thenReturn("/console/category/");
-        when(request.getMethod()).thenReturn("POST");
-
-        final JSONObject adminUser = getUserQueryService().getAdmin();
-        final HttpSession httpSession = mock(HttpSession.class);
-        when(httpSession.getAttribute(User.USER)).thenReturn(adminUser);
-        when(request.getSession(false)).thenReturn(httpSession);
-
+        final MockHttpServletRequest request = mockRequest();
+        request.setRequestURI("/console/category/");
+        request.setMethod("POST");
         final JSONObject requestJSON = new JSONObject();
         requestJSON.put(Category.CATEGORY_T_TAGS, "Solo");
         requestJSON.put(Category.CATEGORY_TITLE, "分类1");
         requestJSON.put(Category.CATEGORY_URI, "cate1");
 
-
         final BufferedReader reader = new BufferedReader(new StringReader(requestJSON.toString()));
-        when(request.getReader()).thenReturn(reader);
+        request.setReader(reader);
 
-        final MockDispatcherServlet dispatcherServlet = new MockDispatcherServlet();
-        dispatcherServlet.init();
+        mockAdminLogin(request);
+        final MockHttpServletResponse response = mockResponse();
+        mockDispatcherServletService(request, response);
 
-        final StringWriter stringWriter = new StringWriter();
-        final PrintWriter printWriter = new PrintWriter(stringWriter);
+        final String content = response.body();
+        Assert.assertTrue(StringUtils.contains(content, "sc\":true"));
+    }
 
-        final HttpServletResponse response = mock(HttpServletResponse.class);
-        when(response.getWriter()).thenReturn(printWriter);
+    /**
+     * getCategory.
+     *
+     * @throws Exception exception
+     */
+    @Test(dependsOnMethods = "addCategory")
+    public void getCategory() throws Exception {
+        final JSONObject category = getCategoryQueryService().getByTitle("分类1");
 
-        dispatcherServlet.service(request, response);
+        final MockHttpServletRequest request = mockRequest();
+        request.setRequestURI("/console/category/" + category.optString(Keys.OBJECT_ID));
+        request.setMethod("GET");
 
-        final String content = stringWriter.toString();
+        mockAdminLogin(request);
+
+        final MockHttpServletResponse response = mockResponse();
+        mockDispatcherServletService(request, response);
+
+        final String content = response.body();
         Assert.assertTrue(StringUtils.contains(content, "sc\":true"));
     }
 
@@ -119,38 +106,23 @@ public class CategoryConsoleTestCase extends AbstractTestCase {
      */
     @Test(dependsOnMethods = "addCategory")
     public void updateCategory() throws Exception {
-        final HttpServletRequest request = mock(HttpServletRequest.class);
-        when(request.getServletContext()).thenReturn(mock(ServletContext.class));
-        when(request.getRequestURI()).thenReturn("/console/category/");
-        when(request.getMethod()).thenReturn("PUT");
-
-        final JSONObject adminUser = getUserQueryService().getAdmin();
-        final HttpSession httpSession = mock(HttpSession.class);
-        when(httpSession.getAttribute(User.USER)).thenReturn(adminUser);
-        when(request.getSession(false)).thenReturn(httpSession);
-
-        JSONObject category = getCategoryQueryService().getByTitle("分类1");
-
+        final MockHttpServletRequest request = mockRequest();
+        request.setRequestURI("/console/category/");
+        request.setMethod("PUT");
         final JSONObject requestJSON = new JSONObject();
         requestJSON.put(Category.CATEGORY_T_TAGS, "Solo");
+        JSONObject category = getCategoryQueryService().getByTitle("分类1");
         requestJSON.put(Keys.OBJECT_ID, category.optString(Keys.OBJECT_ID));
         requestJSON.put(Category.CATEGORY_TITLE, "新的分类1");
-
         final BufferedReader reader = new BufferedReader(new StringReader(requestJSON.toString()));
-        when(request.getReader()).thenReturn(reader);
+        request.setReader(reader);
 
-        final MockDispatcherServlet dispatcherServlet = new MockDispatcherServlet();
-        dispatcherServlet.init();
+        mockAdminLogin(request);
 
-        final StringWriter stringWriter = new StringWriter();
-        final PrintWriter printWriter = new PrintWriter(stringWriter);
+        final MockHttpServletResponse response = mockResponse();
+        mockDispatcherServletService(request, response);
 
-        final HttpServletResponse response = mock(HttpServletResponse.class);
-        when(response.getWriter()).thenReturn(printWriter);
-
-        dispatcherServlet.service(request, response);
-
-        final String content = stringWriter.toString();
+        final String content = response.body();
         Assert.assertTrue(StringUtils.contains(content, "sc\":true"));
 
         category = getCategoryQueryService().getByTitle("分类1");
@@ -159,5 +131,74 @@ public class CategoryConsoleTestCase extends AbstractTestCase {
         category = getCategoryQueryService().getByTitle("新的分类1");
         Assert.assertNotNull(category);
         Assert.assertEquals(category.optInt(Category.CATEGORY_TAG_CNT), 1); // https://github.com/b3log/solo/issues/12274
+    }
+
+    /**
+     * getCategories.
+     *
+     * @throws Exception exception
+     */
+    @Test(dependsOnMethods = "updateCategory")
+    public void getCategories() throws Exception {
+        final MockHttpServletRequest request = mockRequest();
+        request.setRequestURI("/console/categories/1/10/20");
+        request.setMethod("GET");
+
+        mockAdminLogin(request);
+
+        final MockHttpServletResponse response = mockResponse();
+        mockDispatcherServletService(request, response);
+
+        final String content = response.body();
+        Assert.assertTrue(StringUtils.contains(content, "sc\":true"));
+    }
+
+    /**
+     * changeOrder.
+     *
+     * @throws Exception exception
+     */
+    @Test(dependsOnMethods = "getCategories")
+    public void changeOrder() throws Exception {
+        final JSONObject category = getCategoryQueryService().getByTitle("新的分类1");
+
+        final MockHttpServletRequest request = mockRequest();
+        request.setRequestURI("/console/category/order/");
+        request.setMethod("PUT");
+        final JSONObject requestJSON = new JSONObject();
+        requestJSON.put(Keys.OBJECT_ID, category.optString(Keys.OBJECT_ID));
+        requestJSON.put(Common.DIRECTION, "up");
+        final BufferedReader reader = new BufferedReader(new StringReader(requestJSON.toString()));
+        request.setReader(reader);
+
+        mockAdminLogin(request);
+
+        final MockHttpServletResponse response = mockResponse();
+        mockDispatcherServletService(request, response);
+
+        final String content = response.body();
+        Assert.assertTrue(StringUtils.contains(content, "sc\":true"));
+    }
+
+    /**
+     * removeCategory.
+     *
+     * @throws Exception exception
+     */
+    @Test(dependsOnMethods = "changeOrder")
+    public void removeCategory() throws Exception {
+        final JSONObject category = getCategoryQueryService().getByTitle("新的分类1");
+
+        final MockHttpServletRequest request = mockRequest();
+        request.setRequestURI("/console/category/" + category.optString(Keys.OBJECT_ID));
+        request.setMethod("DELETE");
+
+        mockAdminLogin(request);
+
+        final MockHttpServletResponse response = mockResponse();
+        mockDispatcherServletService(request, response);
+
+        final String content = response.body();
+        Assert.assertTrue(StringUtils.contains(content, "sc\":true"));
     }
 }
