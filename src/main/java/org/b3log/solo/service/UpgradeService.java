@@ -56,7 +56,7 @@ import java.util.List;
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
  * @author <a href="mailto:dongxu.wang@acm.org">Dongxu Wang</a>
- * @version 1.2.0.32, Dec 11, 2018
+ * @version 1.2.0.33, Jan 15, 2019
  * @since 1.2.0
  */
 @Service
@@ -80,7 +80,7 @@ public class UpgradeService {
     /**
      * Old version.
      */
-    private static final String FROM_VER = "2.9.6";
+    private static final String FROM_VER = "2.9.7";
 
     /**
      * New version.
@@ -191,12 +191,6 @@ public class UpgradeService {
             versionOpt.put(Option.OPTION_VALUE, TO_VER);
             optionRepository.update(Option.ID_C_VERSION, versionOpt);
 
-            final JSONObject customVarsOpt = new JSONObject();
-            customVarsOpt.put(Keys.OBJECT_ID, Option.ID_C_CUSTOM_VARS);
-            customVarsOpt.put(Option.OPTION_CATEGORY, Option.CATEGORY_C_PREFERENCE);
-            customVarsOpt.put(Option.OPTION_VALUE, Option.DefaultPreference.DEFAULT_CUSTOM_VARS);
-            optionRepository.add(customVarsOpt);
-
             transaction.commit();
 
             LOGGER.log(Level.INFO, "Upgraded from version [{0}] to version [{1}] successfully :-)", FROM_VER, TO_VER);
@@ -265,10 +259,7 @@ public class UpgradeService {
 
     private void upgradeArticles() throws Exception {
         final List<JSONObject> articles = articleRepository.getList(new Query().
-                addProjection(Keys.OBJECT_ID, String.class).
-                addProjection(Article.ARTICLE_T_CREATE_DATE, Date.class).
-                addProjection(Article.ARTICLE_T_UPDATE_DATE, Date.class).
-                addProjection(Article.ARTICLE_T_AUTHOR_EMAIL, String.class));
+                select(Keys.OBJECT_ID, Article.ARTICLE_T_CREATE_DATE, Article.ARTICLE_T_UPDATE_DATE, Article.ARTICLE_T_AUTHOR_EMAIL));
         if (articles.isEmpty()) {
             LOGGER.log(Level.TRACE, "No articles");
 

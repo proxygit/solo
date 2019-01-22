@@ -15,21 +15,13 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package org.b3log.solo.mail.local;
-
-import org.b3log.solo.mail.MailService;
-
 /**
- * JavaMail implementation of the {@link MailService} interface.
+ * @fileoverview 注册 Service Work，目前为空，只为触发添加到桌面。
  *
- * @author <a href="https://hacpai.com/member/jiangzezhou">zezhou jiang</a>
- * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.0.0.5, Jan 18, 2019
+ * @author <a href="http://vanessa.b3log.org">Liyuan Li</a>
+ * @version 0.1.0.0, Jan 13, 2019
  */
-public final class LocalMailService implements MailService {
 
-    @Override
-    public void send(final Message message) {
-        new Thread(() -> new MailSender().sendMail(message)).start();
-    }
-}
+self.addEventListener('fetch', function (event) {
+  // fix 'cannot be installed: does not work offline'
+})
